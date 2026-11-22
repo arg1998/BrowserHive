@@ -2,17 +2,21 @@
 // @ts-check
 /**
  * @module scripts/registry-sign — the site-pack registry's signing step (spec 13 §10.2, §10.7). It
- * runs in the `registry-signing` environment without installing dependencies (`node`, the checked-out
- * commit and `git` only), recomputes from the commit every pack file and the unsigned index the
- * build job produced, refuses on any difference, and only then signs `index.json` with the online
- * key from `REGISTRY_ONLINE_KEY`. Commands:
+ * runs in the `registry-signing` environment without installing dependencies (`node` and the
+ * checked-out commit only), recomputes from the commit's `registry/` (archive included) every pack
+ * file and the unsigned index the build job produced, refuses on any difference, checks the
+ * published layout (D-81: verified against the pinned roots and the commit's online keys, its
+ * version above `registry/state.json` and within the fast-forward bound, its published versions
+ * unchanged), and only then signs `index.json` with the online key from `REGISTRY_ONLINE_KEY`.
+ * Commands:
  *
- *   sign  --artefact <dir> --out <dir> --previous <dir> [--checksums <file>]
+ *   sign  --artefact <dir> --out <dir> --previous <dir> [--first-publish] [--checksums <file>]
  *   sign  --artefact <dir> --out <dir> --test-keys <dir>    pull-request previews: a throwaway root
  *                                                           and online key no release trusts
  *   fetch --url <base> --out <dir> [--packs]                download the published layout
  *   carry --from <dir> --out <dir>                          verify a downloaded layout and copy it
- *                                                           (a website deploy that does not re-sign)
+ *                                                           (a website deploy that does not re-sign);
+ *                                                           only this commit's keys.json is carried
  *
  * Every command takes `--repo <dir>` (default: this script's repository).
  */
@@ -30,7 +34,9 @@ import {
   canonicalJson,
   collectRegistry,
   DAY_MS,
+  fsReader,
   generateKey,
+  INDEX_FAST_FORWARD,
   INDEX_LIFETIME_MS,
   INDEX_MAX_BYTES,
   instant,
@@ -38,7 +44,7 @@ import {
   privateKeyFromPkcs8,
   rawPublicKey,
   readRootKeys,
-  requireFullHistory,
+  readState,
   SECRET_PREFIX,
   sha256Hex,
   signatureFile,
@@ -128,63 +134,154 @@ function rootsOf(repo) {
 }
 
 /**
- * Checks a layout's chain (`keys.json` by a root, `index.json` by one of its online keys) and every
- * listed pack file. Clocks are not checked: this is about what was published, not whether a client
- * would still accept it today.
+ * @typedef {{ version: number, expires: string, online: { key_id: string, public_key: string,
+ *   not_after: string }[] }} KeysDoc
+ * @typedef {{ version: number, issued_at: string, expires: string, packs: { id: string,
+ *   versions: { v: number, sha256: string, size: number, path: string, min_client: string,
+ *   max_client?: string }[] }[] }} IndexDoc
+ */
+
+/** @param {Buffer} bytes @param {string} what @returns {any} */
+function jsonOf(bytes, what) {
+  try {
+    return JSON.parse(bytes.toString('utf8'));
+  } catch {
+    return refuse(`${what} is not JSON`);
+  }
+}
+
+/** The commit's `registry/keys/keys.json`, verified against the roots. @param {string} repo */
+function commitKeys(repo) {
+  const roots = rootsOf(repo);
+  const path = join(repo, 'registry', 'keys', 'keys.json');
+  if (!existsSync(path))
+    refuse('registry/keys/keys.json is missing: run registry-keys.mjs online-key');
+  const bytes = readFileSync(path);
+  const sig = existsSync(`${path}.sig`) ? readFileSync(`${path}.sig`, 'utf8') : '';
+  if (verifiedBy(bytes, sig, roots) === null)
+    refuse('registry/keys/keys.json: no root signature verifies');
+  /** @type {KeysDoc} */
+  const keys = jsonOf(bytes, 'registry/keys/keys.json');
+  if (!Number.isSafeInteger(keys.version) || !Array.isArray(keys.online))
+    refuse('registry/keys/keys.json: not a keys file');
+  return { roots, bytes, sig, keys };
+}
+
+/** @param {string} repo */
+function recordedVersion(repo) {
+  const state = readState(fsReader(repo));
+  if (state === null) refuse('registry/state.json is missing or malformed');
+  return state.index_version;
+}
+
+/**
+ * The published layout in `dir`, checked as the signing and carry steps need it (M1, M4 of the
+ * review): `keys.json` signed by a root, `index.json` signed by an online key **the commit's**
+ * `keys.json` lists, a safe-integer version not below `registry/state.json` and within the
+ * fast-forward bound. Clocks are not checked: this is about what was published.
  *
  * @param {string} dir
- * @param {ReadonlyMap<string, string>} roots
- * @param {boolean} withPacks whether the pack files are there to check
+ * @param {ReturnType<typeof commitKeys>} commit
+ * @param {number} recorded
+ * @returns {{ keysBytes: Buffer, keys: KeysDoc, index: IndexDoc, signedBy: string }}
  */
-function verifyPublished(dir, roots, withPacks) {
+function verifyPublished(dir, commit, recorded) {
   const read = (/** @type {string} */ name) => readFileSync(join(dir, name));
   const keysBytes = read('keys.json');
-  if (verifiedBy(keysBytes, read('keys.json.sig').toString('utf8'), roots) === null) {
-    refuse(`${dir}/keys.json: no root signature verifies`);
+  if (verifiedBy(keysBytes, read('keys.json.sig').toString('utf8'), commit.roots) === null) {
+    refuse('the published keys.json: no root signature verifies');
   }
-  const keys = JSON.parse(keysBytes.toString('utf8'));
-  /** @type {Map<string, string>} */
-  const online = new Map(keys.online.map((/** @type {any} */ k) => [k.key_id, k.public_key]));
+  /** @type {KeysDoc} */
+  const keys = jsonOf(keysBytes, 'the published keys.json');
+  if (!Number.isSafeInteger(keys.version) || keys.version > commit.keys.version) {
+    refuse(
+      `the published keys.json is version ${keys.version}, this commit's ${commit.keys.version}`,
+    );
+  }
   const indexBytes = read('index.json');
-  if (indexBytes.byteLength > INDEX_MAX_BYTES) refuse(`${dir}/index.json is too large`);
-  if (verifiedBy(indexBytes, read('index.json.sig').toString('utf8'), online) === null) {
-    refuse(`${dir}/index.json: no signature of an online key of keys.json verifies`);
+  if (indexBytes.byteLength > INDEX_MAX_BYTES) refuse('the published index.json is too large');
+  const online = new Map(commit.keys.online.map((k) => [k.key_id, k.public_key]));
+  const signedBy = verifiedBy(indexBytes, read('index.json.sig').toString('utf8'), online);
+  if (signedBy === null) {
+    refuse(
+      'the published index.json is signed by no online key this commit\'s keys.json lists (a revoked key, or not ours): re-publish deliberately, see docs/contributing/registry.md "If the published registry cannot be verified"',
+    );
   }
-  const index = JSON.parse(indexBytes.toString('utf8'));
+  /** @type {IndexDoc} */
+  const index = jsonOf(indexBytes, 'the published index.json');
+  if (!Number.isSafeInteger(index.version) || index.version < 1 || !Array.isArray(index.packs)) {
+    refuse('the published index.json has no valid version');
+  }
+  if (index.version < recorded) {
+    refuse(
+      `the published index.json is version ${index.version}, below the ${recorded} registry/state.json records (a rollback)`,
+    );
+  }
+  if (index.version > recorded + INDEX_FAST_FORWARD) {
+    refuse(
+      `the published index.json is version ${index.version}, more than ${INDEX_FAST_FORWARD} above the ${recorded} registry/state.json records (a fast-forward)`,
+    );
+  }
+  return { keysBytes, keys, index, signedBy };
+}
+
+/** A published version may never change (M3): same sha, size and client range. @param {IndexDoc} live @param {import('./registry-common.mjs').UnsignedIndex} next */
+function requireUnchangedVersions(live, next) {
+  const now = new Map(next.packs.flatMap((p) => p.versions.map((v) => [`${p.id} v${v.v}`, v])));
+  for (const pack of live.packs) {
+    for (const was of pack.versions ?? []) {
+      const is = now.get(`${pack.id} v${was.v}`);
+      if (is === undefined) continue;
+      if (
+        is.sha256 !== was.sha256 ||
+        is.size !== was.size ||
+        is.min_client !== was.min_client ||
+        is.max_client !== was.max_client
+      ) {
+        refuse(
+          `${pack.id} v${was.v} is published with other content; a published version never changes`,
+        );
+      }
+    }
+  }
+}
+
+/** Every listed pack file of `dir` against its index entry. @param {string} dir @param {IndexDoc} index */
+function verifyPackFiles(dir, index) {
   /** @type {string[]} */
-  const packFiles = [];
-  for (const pack of withPacks ? index.packs : []) {
+  const paths = [];
+  for (const pack of index.packs) {
     for (const entry of pack.versions) {
       if (
         !PACK_PATH_RE.test(entry.path) ||
         entry.path !== `packs/${pack.id}/${entry.sha256}.json`
       ) {
-        refuse(`${dir}/index.json: bad path ${entry.path}`);
+        refuse(`the published index.json: bad path ${entry.path}`);
       }
       const file = join(dir, entry.path);
-      if (!existsSync(file)) refuse(`${dir}/${entry.path} is missing`);
+      if (!existsSync(file)) refuse(`the published ${entry.path} is missing`);
       const bytes = readFileSync(file);
       if (bytes.byteLength !== entry.size || sha256Hex(bytes) !== entry.sha256) {
-        refuse(`${dir}/${entry.path}: size or SHA-256 differs from the index`);
+        refuse(`the published ${entry.path}: size or SHA-256 differs from the index`);
       }
-      packFiles.push(entry.path);
+      paths.push(entry.path);
     }
   }
-  return { keys, index, packFiles };
+  return paths;
 }
 
-/** The online key from `REGISTRY_ONLINE_KEY` (`bhreg1.<key id>.<base64 PKCS#8>`). */
+/** The online key from `REGISTRY_ONLINE_KEY` (`bhreg1.<key id>.<base64 PKCS#8>`), removed from the environment once read. */
 function onlineKeyFromEnv() {
   const value = (process.env['REGISTRY_ONLINE_KEY'] ?? '').trim();
+  delete process.env['REGISTRY_ONLINE_KEY'];
   if (value === '')
     refuse('REGISTRY_ONLINE_KEY is not set (the registry-signing environment secret)');
   const [prefix, keyId, b64] = value.split('.');
   if (prefix !== SECRET_PREFIX || keyId === undefined || b64 === undefined) {
-    refuse('REGISTRY_ONLINE_KEY is not a value written by registry-keys.ts online-key');
+    refuse('REGISTRY_ONLINE_KEY is not a value written by registry-keys.mjs online-key');
   }
   const privateKey = privateKeyFromPkcs8(Buffer.from(b64, 'base64'));
-  const publicKey = rawPublicKey(privateKey);
-  return { privateKey, publicKey, keyId };
+  return { privateKey, publicKey: rawPublicKey(privateKey), keyId };
 }
 
 /**
@@ -194,8 +291,7 @@ function onlineKeyFromEnv() {
  * @param {string} artefact
  */
 function checkArtefact(repo, artefact) {
-  requireFullHistory(repo);
-  const expected = collectRegistry(repo);
+  const expected = collectRegistry(fsReader(repo));
   if (expected.problems.length > 0) refuse(`registry/: ${expected.problems.join('; ')}`);
   const indexText = canonicalJson(expected.index);
   const artefactIndex = join(artefact, 'index.json');
@@ -212,7 +308,7 @@ function checkArtefact(repo, artefact) {
   for (const [path, bytes] of expected.files) {
     const file = join(artefact, path);
     if (!existsSync(file) || !readFileSync(file).equals(bytes)) {
-      refuse(`the artefact ${path} differs from registry/packs at this commit`);
+      refuse(`the artefact ${path} differs from registry/archive at this commit`);
     }
   }
   for (const name of keyFiles) {
@@ -262,22 +358,14 @@ function signCommand(flags, repo) {
     );
     chain = { keysBytes, keysSig: signatureFile(keysBytes, [root]), online, notAfter, version: 1 };
   } else {
-    const roots = rootsOf(repo);
-    const keysPath = join(repo, 'registry', 'keys', 'keys.json');
-    if (!existsSync(keysPath))
-      refuse('registry/keys/keys.json is missing: run registry-keys.ts online-key');
-    const keysBytes = readFileSync(keysPath);
-    const keysSig = readFileSync(`${keysPath}.sig`, 'utf8');
-    if (verifiedBy(keysBytes, keysSig, roots) === null)
-      refuse('registry/keys/keys.json: no root signature verifies');
-    const keys = JSON.parse(keysBytes.toString('utf8'));
-    const expires = Date.parse(keys.expires);
+    const commit = commitKeys(repo);
+    const expires = Date.parse(commit.keys.expires);
     if (!(expires > now + DAY_MS))
-      refuse(`keys.json expires ${keys.expires}: re-sign it (registry-keys.ts sign-keys)`);
+      refuse(`keys.json expires ${commit.keys.expires}: re-sign it (registry-keys.mjs sign-keys)`);
     if (expires < now + 21 * DAY_MS)
-      console.warn(`::warning::keys.json expires ${keys.expires}; re-sign it soon`);
+      console.warn(`::warning::keys.json expires ${commit.keys.expires}; re-sign it soon`);
     const online = onlineKeyFromEnv();
-    const listed = keys.online.find((/** @type {any} */ k) => k.key_id === online.keyId);
+    const listed = commit.keys.online.find((k) => k.key_id === online.keyId);
     if (listed === undefined || listed.public_key !== online.publicKey) {
       refuse(`the online key ${online.keyId} is not listed in keys.json`);
     }
@@ -286,20 +374,25 @@ function signCommand(flags, repo) {
       refuse(`the online key is valid until ${listed.not_after}: rotate it`);
     if (notAfter < now + 14 * DAY_MS)
       console.warn(`::warning::the online key is valid until ${listed.not_after}; rotate it`);
+    const recorded = recordedVersion(repo);
     const previous = resolve(required(flags, 'previous'));
-    let version = 1;
-    if (existsSync(join(previous, 'index.json'))) {
-      const published = verifyPublished(previous, roots, false);
-      if (published.keys.version > keys.version) {
-        refuse(
-          `the published keys.json is version ${published.keys.version}, this commit's ${keys.version}`,
-        );
-      }
-      version = Number(published.index.version) + 1;
+    const present = LAYOUT_FILES.filter((f) => existsSync(join(previous, f)));
+    let version;
+    if (present.length === LAYOUT_FILES.length) {
+      const published = verifyPublished(previous, commit, recorded);
+      requireUnchangedVersions(published.index, expected.index);
+      version = Math.max(published.index.version, recorded) + 1;
+    } else if (present.length === 0 && flags['first-publish'] === true) {
+      console.warn(`::warning::nothing is published; first publication as version ${recorded + 1}`);
+      version = recorded + 1;
+    } else if (present.length === 0) {
+      refuse(
+        `nothing is published${recorded > 0 ? `, but registry/state.json records index version ${recorded}: the site lost its registry; restore it, or re-publish deliberately with first_publish` : ' yet: run the website workflow with first_publish for the first publication'}`,
+      );
     } else {
-      console.warn('::warning::no index.json is published yet; this is version 1');
+      refuse(`the site publishes only ${present.join(', ')}`);
     }
-    chain = { keysBytes, keysSig, online, notAfter, version };
+    chain = { keysBytes: commit.bytes, keysSig: commit.sig, online, notAfter, version };
   }
   const index = {
     schema: 1,
@@ -333,7 +426,9 @@ function signCommand(flags, repo) {
     typeof testDir === 'string' ? 'a throwaway test key' : `online key ${chain.online.keyId}`;
   const line = `Signed index.json version ${index.version} (${expected.index.packs.length} packs, ${versions} versions) with ${mode}; expires ${index.expires}.`;
   console.log(line);
-  summary(`### Site-pack registry\n\n${line}`);
+  summary(
+    `### Site-pack registry\n\n${line}${typeof testDir === 'string' ? '' : ` Record it: set \`index_version\` in registry/state.json to ${index.version} in a later pull request.`}`,
+  );
 }
 
 /** @param {string} url @param {number} max @returns {Promise<Buffer | null>} */
@@ -372,7 +467,7 @@ async function fetchCommand(flags) {
   }
   if (found.length !== LAYOUT_FILES.length) refuse(`${base} publishes only ${found.join(', ')}`);
   if (flags['packs'] !== true) return;
-  const index = JSON.parse(readFileSync(join(out, 'index.json'), 'utf8'));
+  const index = jsonOf(readFileSync(join(out, 'index.json')), 'index.json');
   for (const pack of index.packs ?? []) {
     for (const entry of pack.versions ?? []) {
       if (typeof entry.path !== 'string' || !PACK_PATH_RE.test(entry.path))
@@ -385,20 +480,39 @@ async function fetchCommand(flags) {
   console.log(`fetched the layout published at ${base}`);
 }
 
-/** @param {Record<string, string | true>} flags @param {string} repo */
+/**
+ * Re-publishes the live layout unchanged, only when it is exactly what this commit would keep
+ * serving (M4): its `keys.json` is this commit's byte for byte, its index is signed by an online
+ * key of it that is still valid, and the checks of {@link verifyPublished} pass.
+ *
+ * @param {Record<string, string | true>} flags @param {string} repo
+ */
 function carryCommand(flags, repo) {
   const from = resolve(required(flags, 'from'));
   const out = resolve(required(flags, 'out'));
   requireEmpty(out);
-  if (!existsSync(join(from, 'index.json'))) {
+  if (LAYOUT_FILES.every((f) => !existsSync(join(from, f)))) {
     console.log('nothing is published yet; the site deploys without a registry');
     return;
   }
-  const { index, packFiles } = verifyPublished(from, rootsOf(repo), true);
+  const commit = commitKeys(repo);
+  const published = verifyPublished(from, commit, recordedVersion(repo));
+  if (!published.keysBytes.equals(commit.bytes)) {
+    refuse(
+      "the published keys.json is not this commit's registry/keys/keys.json: a re-sign is needed (run the website workflow with sign)",
+    );
+  }
+  const signer = commit.keys.online.find((k) => k.key_id === published.signedBy);
+  if (signer === undefined || !(Date.parse(signer.not_after) > Date.now())) {
+    refuse(
+      `the published index.json is signed by ${published.signedBy}, which is no longer valid: a re-sign is needed`,
+    );
+  }
+  const packFiles = verifyPackFiles(from, published.index);
   for (const name of [...LAYOUT_FILES, ...packFiles])
     writeOut(join(out, name), readFileSync(join(from, name)));
-  const expires = Date.parse(index.expires);
-  if (expires < Date.now() + 3 * DAY_MS) {
+  const { index } = published;
+  if (Date.parse(index.expires) < Date.now() + 3 * DAY_MS) {
     console.warn(
       `::warning::the published index.json expires ${index.expires}; approve a re-sign (registry-resign)`,
     );

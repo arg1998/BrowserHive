@@ -1,0 +1,103 @@
+{
+  "description": "Meta's terms bar accessing or collecting data by automated means, signed in or not. Sign-out, Accounts Center and login-dialog approvals are blocked for agents.",
+  "domains": [
+    "facebook.com",
+    "fbcdn.net"
+  ],
+  "guards": [
+    {
+      "action": "block",
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "www.facebook.com/logout.php"
+      }
+    },
+    {
+      "action": "block",
+      "id": "oauth-approve",
+      "kind": "credential",
+      "match": {
+        "methods": [
+          "POST"
+        ],
+        "url": "www.facebook.com/*dialog/oauth*"
+      }
+    },
+    {
+      "action": "block",
+      "id": "password-security",
+      "kind": "credential",
+      "match": {
+        "url": "accountscenter.facebook.com/password_and_security"
+      }
+    },
+    {
+      "action": "block",
+      "id": "accounts-center",
+      "kind": "account",
+      "match": {
+        "url": "accountscenter.facebook.com"
+      }
+    }
+  ],
+  "id": "facebook.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "sign_in": {
+    "human_only": false,
+    "url": {
+      "host": "www.facebook.com",
+      "path": "/login.php"
+    }
+  },
+  "signed_in": {
+    "cookie_names": [
+      "c_user",
+      "xs"
+    ],
+    "kind": "redirect",
+    "probe": {
+      "host": "www.facebook.com",
+      "path": "/settings"
+    },
+    "signed_out_redirects": [
+      "www.facebook.com/login.php*"
+    ]
+  },
+  "sources": [
+    {
+      "kind": "official",
+      "url": "https://www.facebook.com/terms.php"
+    },
+    {
+      "kind": "official",
+      "url": "https://www.facebook.com/privacy/policies/cookies/?subpage=subpage-1.1"
+    },
+    {
+      "kind": "official",
+      "url": "https://developers.facebook.com/docs/facebook-login/guides/advanced/manual-flow"
+    },
+    {
+      "kind": "observed",
+      "url": "https://www.facebook.com/settings"
+    }
+  ],
+  "title": "Facebook",
+  "verified": {
+    "guards": "2026-11-16",
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "write_policy": "2026-11-16"
+  },
+  "version": 1,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "You may not access or collect data from our Products using automated means (without our prior permission) or attempt to access data you do not have permission to access, regardless of whether such automated access or collection is undertaken while logged-in to a Facebook account.",
+      "url": "https://www.facebook.com/terms.php"
+    },
+    "default": "confirm",
+    "stance": "prohibited"
+  }
+}

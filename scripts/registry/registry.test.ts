@@ -1,55 +1,90 @@
-/** @module scripts/registry/registry.test — the publishing scripts' round trip on a throwaway git repository (spec 13 §10.7, T4a acceptance): root and online keys made at run time with keys-ops, `registry-build.ts --out` then `node registry-sign.mjs sign` without dependencies, the result verified by core's verifier with those roots and refused by this build's pinned root; tampering with the artefact between build and sign is refused; the next signature takes the next version; previews sign with a throwaway test root; `carry` re-publishes verified files only; `--check` against a base enforces the version rules and prints each change's classification. */
+/** @module scripts/registry/registry.test — the publishing scripts on a throwaway repository with a single commit (spec 13 §10.7; a squash merge leaves no history, review #97 H1): keys made at run time with `registry-keys.mjs`, `registry-build.ts --out` (also outside git), `node registry-sign.mjs sign` without dependencies, verified by core's verifier with those roots and refused by this build's pinned root; the published layout's checks before a signature (review M1: unverifiable, foreign signer, rollback, fast-forward, non-numeric; M3: a published version changed; never a silent version 1); tampering between build and sign; previews; `carry` only of this commit's layout (M4); `--check` against a base; `registry-keys.mjs` imports only Node built-ins (M5).
+ *
+ * Timeouts: every case starts Node or Bun child processes (Bun loads core for `registry-build.ts`)
+ * and derives scrypt keys (N = 2^17, about 0.3 s each); Windows runners start processes several
+ * times slower than Linux (job 137117856369 hit Bun's 5 s default), so each case gets 60 s.
+ */
 
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  createHash,
+  createPrivateKey,
+  generateKeyPairSync,
+  type KeyObject,
+  sign,
+} from 'node:crypto';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
 import { PINNED_TRUST_ROOT, verifySignedLayout } from '@browserhive/core/server';
 import { canonicalJson, readRootKeys } from '../registry-common.mjs';
-import { readRootKeyFile } from './keyfile.ts';
-import { addOnlineKey, initRoots, type KeyPaths } from './keys-ops.ts';
+import { addOnlineKey, initRoots, readRootKeyFile, resignKeys } from '../registry-keys.mjs';
+import { syncRegistry } from './sync.ts';
 
+const T = 60_000;
 const REPO = resolve(import.meta.dir, '..', '..');
 const PASS = `pass-${Math.random().toString(36).slice(2)}-phrase`;
 const NODE = process.env['BHDEV_NODE'] ?? 'node';
+const TRUST_ROOT = join('packages', 'core', 'src', 'infra', 'site-packs', 'trust-root.ts');
+
+/** An index edit that changes nothing (the layout is only re-signed). */
+const unchanged = (_index: Record<string, unknown>): void => undefined;
 
 let work: string;
 let repo: string;
 let secret: string;
 let root: SitePacksTrustRoot;
 
-function git(...args: string[]): void {
-  execFileSync('git', ['-C', repo, ...args], { stdio: 'ignore' });
-}
+const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { stdio: 'pipe' });
 
 function run(command: string, args: string[], env: Record<string, string> = {}) {
   const result = spawnSync(command, args, {
     cwd: REPO,
-    env: { ...process.env, CI: '', GITHUB_STEP_SUMMARY: '', ...env },
+    env: { ...process.env, CI: '', GITHUB_STEP_SUMMARY: '', REGISTRY_ONLINE_KEY: '', ...env },
     encoding: 'utf8',
   });
   return { code: result.status ?? -1, out: `${result.stdout}${result.stderr}` };
 }
 
-const build = (...args: string[]) =>
-  run(process.execPath, [join(REPO, 'scripts', 'registry-build.ts'), '--repo', repo, ...args]);
+const build = (at: string, ...args: string[]) =>
+  run(process.execPath, [join(REPO, 'scripts', 'registry-build.ts'), '--repo', at, ...args]);
 const signer = (args: string[], env: Record<string, string> = {}) =>
   run(NODE, [join(REPO, 'scripts', 'registry-sign.mjs'), ...args, '--repo', repo], env);
+const signed = (out: string, previous: string, extra: string[] = []) =>
+  signer(
+    ['sign', '--artefact', join(work, 'art'), '--out', out, '--previous', previous, ...extra],
+    {
+      REGISTRY_ONLINE_KEY: secret,
+    },
+  );
 
 function pack(version: number, title: string): string {
   const real = JSON.parse(readFileSync(join(REPO, 'registry', 'packs', 'github.com.json'), 'utf8'));
   return canonicalJson({ ...real, version, title, min_client: '0.1.0' });
 }
 
-function versions(...vs: number[]): string {
-  return canonicalJson({
-    schema: 1,
-    versions: Object.fromEntries(
-      vs.map((v) => [String(v), { released: '2026-11-20', notes: `Version ${v}.` }]),
-    ),
-  });
+function writeNotes(): void {
+  const path = join(repo, 'registry', 'versions', 'github.com.json');
+  const meta = JSON.parse(readFileSync(path, 'utf8'));
+  for (const entry of Object.values(meta.versions) as Record<string, string>[]) {
+    if (entry['notes'] === '') entry['notes'] = 'A test version.';
+  }
+  writeFileSync(path, canonicalJson(meta));
+}
+
+function setPack(version: number, title: string): void {
+  writeFileSync(join(repo, 'registry', 'packs', 'github.com.json'), pack(version, title));
+  syncRegistry(repo, '2026-11-20');
+  writeNotes();
+}
+
+function setState(version: number): void {
+  writeFileSync(
+    join(repo, 'registry', 'state.json'),
+    canonicalJson({ schema: 1, index_version: version }),
+  );
 }
 
 async function verify(dir: string, trust: SitePacksTrustRoot) {
@@ -67,326 +102,400 @@ async function verify(dir: string, trust: SitePacksTrustRoot) {
   });
 }
 
+/** A copy of the published layout `from`, its index changed by `edit` and signed by `key` (default: the online key). */
+function doctored(
+  name: string,
+  from: string,
+  edit: (index: Record<string, unknown>) => void,
+  key?: KeyObject,
+  keyId?: string,
+): string {
+  const dir = join(work, name);
+  cpSync(from, dir, { recursive: true });
+  const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
+  edit(index);
+  const bytes = Buffer.from(canonicalJson(index));
+  const [, id, b64] = secret.split('.');
+  const privateKey =
+    key ??
+    createPrivateKey({ key: Buffer.from(b64 ?? '', 'base64'), format: 'der', type: 'pkcs8' });
+  writeFileSync(join(dir, 'index.json'), bytes);
+  writeFileSync(
+    join(dir, 'index.json.sig'),
+    canonicalJson({
+      schema: 1,
+      signatures: [{ key_id: keyId ?? id, sig: sign(null, bytes, privateKey).toString('base64') }],
+    }),
+  );
+  return dir;
+}
+
 beforeAll(() => {
   work = mkdtempSync(join(tmpdir(), 'bh-registry-'));
   repo = join(work, 'repo');
-  const trustRoot = join(repo, 'packages', 'core', 'src', 'infra', 'site-packs', 'trust-root.ts');
   mkdirSync(join(repo, 'registry', 'packs'), { recursive: true });
-  mkdirSync(join(repo, 'registry', 'versions'), { recursive: true });
   cpSync(join(REPO, 'registry', 'keys'), join(repo, 'registry', 'keys'), { recursive: true });
-  mkdirSync(join(trustRoot, '..'), { recursive: true });
-  cpSync(join(REPO, 'packages', 'core', 'src', 'infra', 'site-packs', 'trust-root.ts'), trustRoot);
-  execFileSync('git', ['init', '-q', repo]);
-  git('config', 'user.email', 'test@example.invalid');
-  git('config', 'user.name', 'Test');
-  git('config', 'commit.gpgsign', 'false');
-  // Bytes are signed and hashed exactly: no line-ending conversion on checkout (Windows runners).
-  git('config', 'core.autocrlf', 'false');
-  writeFileSync(join(repo, 'registry', 'packs', 'github.com.json'), pack(1, 'GitHub one'));
-  writeFileSync(join(repo, 'registry', 'versions', 'github.com.json'), versions(1));
-  git('add', '-A');
-  git('commit', '-q', '-m', 'v1');
-  writeFileSync(join(repo, 'registry', 'packs', 'github.com.json'), pack(2, 'GitHub'));
-  writeFileSync(join(repo, 'registry', 'versions', 'github.com.json'), versions(1, 2));
-  // Keys made now, for this run only: two roots (encrypted at rest) and an online key.
+  mkdirSync(join(repo, TRUST_ROOT, '..'), { recursive: true });
+  cpSync(join(REPO, TRUST_ROOT), join(repo, TRUST_ROOT));
+  setState(0);
+  setPack(1, 'GitHub one');
+  setPack(2, 'GitHub');
   const offline = join(work, 'offline');
   mkdirSync(offline, { mode: 0o700 });
-  const paths: KeyPaths = { pubDir: join(repo, 'registry', 'keys'), trustRoot, test: false };
+  const paths = {
+    pubDir: join(repo, 'registry', 'keys'),
+    trustRoot: join(repo, TRUST_ROOT),
+    test: false,
+  };
   initRoots(paths, offline, [PASS, PASS], Date.now(), false);
   const root1 = readRootKeyFile(join(offline, 'root-1.key'), PASS);
   addOnlineKey(paths, root1, join(offline, 'online.secret'), 30, { now: Date.now(), keysDays: 60 });
   secret = readFileSync(join(offline, 'online.secret'), 'utf8').trim();
-  git('add', '-A');
-  git('commit', '-q', '-m', 'v2 and keys');
   const roots = readRootKeys(paths.pubDir);
   root = { keys: roots.keys.map((k) => ({ keyId: k.key_id, publicKey: k.public_key })) };
-});
+  // One commit, no history: what a squash merge leaves (review #97 H1).
+  execFileSync('git', ['init', '-q', repo]);
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'user.name', 'Test');
+  git('config', 'commit.gpgsign', 'false');
+  git('config', 'core.autocrlf', 'false');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'squashed');
+}, T);
 
 afterAll(() => rmSync(work, { recursive: true, force: true }));
 
 describe('registry-build → registry-sign', () => {
-  it('builds the content-addressed layout with both versions and keys.json', () => {
-    const art = join(work, 'art');
-    const built = build('--out', art);
-    expect(built.code).toBe(0);
-    const index = JSON.parse(readFileSync(join(art, 'index.json'), 'utf8'));
-    expect(Object.keys(index)).toEqual(['packs', 'schema']);
-    expect(index.packs[0].versions.map((v: { v: number }) => v.v)).toEqual([2, 1]);
-    for (const v of index.packs[0].versions) {
-      expect(v.path).toBe(`packs/github.com/${v.sha256}.json`);
-      expect(readFileSync(join(art, v.path)).byteLength).toBe(v.size);
-    }
-    expect(readFileSync(join(art, 'keys.json'), 'utf8')).toBe(
-      readFileSync(join(repo, 'registry', 'keys', 'keys.json'), 'utf8'),
-    );
-  });
+  it(
+    'builds both versions from the archive alone, with or without git',
+    () => {
+      const art = join(work, 'art');
+      expect(build(repo, '--out', art).code).toBe(0);
+      const index = JSON.parse(readFileSync(join(art, 'index.json'), 'utf8'));
+      expect(Object.keys(index)).toEqual(['packs', 'schema']);
+      expect(index.packs[0].versions.map((v: { v: number }) => v.v)).toEqual([2, 1]);
+      const plain = join(work, 'no-git');
+      cpSync(repo, plain, { recursive: true, filter: (p) => !p.startsWith(join(repo, '.git')) });
+      const again = join(work, 'art-no-git');
+      expect(build(plain, '--out', again).code).toBe(0);
+      expect(readFileSync(join(again, 'index.json'), 'utf8')).toBe(
+        readFileSync(join(art, 'index.json'), 'utf8'),
+      );
+    },
+    T,
+  );
 
-  it('signs the artefact: core accepts it with the new roots, this build refuses it', async () => {
-    const empty = join(work, 'nothing-published');
-    mkdirSync(empty);
-    const signed = join(work, 'signed');
-    const result = signer(
-      [
-        'sign',
-        '--artefact',
-        join(work, 'art'),
-        '--out',
-        signed,
-        '--previous',
-        empty,
+  it(
+    'never signs a first version 1 by accident; --first-publish does, verified by core',
+    async () => {
+      const empty = join(work, 'nothing-published');
+      mkdirSync(empty);
+      const refused = signed(join(work, 'no-first'), empty);
+      expect(refused.code).toBe(1);
+      expect(refused.out).toContain('first_publish');
+      const first = join(work, 'signed');
+      const result = signed(first, empty, [
+        '--first-publish',
         '--checksums',
         join(work, 'sums.txt'),
-      ],
-      { REGISTRY_ONLINE_KEY: secret },
-    );
-    expect(result.out).toContain('version 1');
-    expect(result.code).toBe(0);
-    const report = await verify(signed, root);
-    expect(report.ok).toBe(true);
-    expect(report.packs.map((p) => [p.version, p.status])).toEqual([
-      [2, 'ok'],
-      [1, 'ok'],
-    ]);
-    expect((await verify(signed, PINNED_TRUST_ROOT)).ok).toBe(false);
-    expect(readFileSync(join(work, 'sums.txt'), 'utf8')).toContain('  index.json.sig');
-  });
+      ]);
+      expect(result.out).toContain('version 1');
+      const report = await verify(first, root);
+      expect(report.ok).toBe(true);
+      expect(report.packs.map((p) => [p.version, p.status])).toEqual([
+        [2, 'ok'],
+        [1, 'ok'],
+      ]);
+      expect((await verify(first, PINNED_TRUST_ROOT)).ok).toBe(false);
+      expect(readFileSync(join(work, 'sums.txt'), 'utf8')).toContain('  index.json.sig');
+    },
+    T,
+  );
 
-  it('the next signature over the published layout takes the next version', async () => {
-    const again = join(work, 'signed-2');
-    const result = signer(
-      ['sign', '--artefact', join(work, 'art'), '--out', again, '--previous', join(work, 'signed')],
-      {
-        REGISTRY_ONLINE_KEY: secret,
-      },
-    );
-    expect(result.code).toBe(0);
-    expect((await verify(again, root)).index?.value.version).toBe(2);
-  });
+  it(
+    'the next signature takes the next version, never below registry/state.json',
+    async () => {
+      expect(signed(join(work, 'signed-2'), join(work, 'signed')).code).toBe(0);
+      expect((await verify(join(work, 'signed-2'), root)).index?.value.version).toBe(2);
+      setState(40);
+      const below = signed(join(work, 'signed-3'), join(work, 'signed-2'));
+      expect(below.out).toContain('below the 40 registry/state.json records');
+      setState(2);
+      expect(signed(join(work, 'signed-3'), join(work, 'signed-2')).code).toBe(0);
+      expect((await verify(join(work, 'signed-3'), root)).index?.value.version).toBe(3);
+      setState(0);
+    },
+    T,
+  );
 
-  it('refuses an artefact tampered with between build and sign', () => {
-    const cases: [string, (dir: string) => void][] = [
-      [
-        'a pack file changed',
-        (dir) => {
-          const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
-          const path = join(dir, index.packs[0].versions[0].path);
-          writeFileSync(path, readFileSync(path, 'utf8').replace('"GitHub"', '"GitHub!"'));
-        },
-      ],
-      [
-        'the unsigned index changed',
-        (dir) => {
-          const path = join(dir, 'index.json');
-          writeFileSync(path, readFileSync(path, 'utf8').replace('Version 2.', 'Version 2!'));
-        },
-      ],
-      [
-        'an extra file',
-        (dir) => writeFileSync(join(dir, 'packs', 'github.com', `${'0'.repeat(64)}.json`), '{}'),
-      ],
-      ['keys.json changed', (dir) => writeFileSync(join(dir, 'keys.json'), '{}\n')],
-    ];
-    for (const [what, tamper] of cases) {
-      const dir = join(work, `tampered-${what.replace(/\W/g, '-')}`);
-      cpSync(join(work, 'art'), dir, { recursive: true });
-      tamper(dir);
-      const result = signer(
-        ['sign', '--artefact', dir, '--out', `${dir}-out`, '--previous', join(work, 'signed')],
-        {
+  it(
+    'refuses a published layout it cannot trust: foreign signer, fast-forward, no number, changed version',
+    () => {
+      const live = join(work, 'signed');
+      const { privateKey } = generateKeyPairSync('ed25519');
+      const cases: [string, string, string][] = [
+        [
+          'foreign',
+          doctored('foreign', live, unchanged, privateKey, '0123456789abcdef'),
+          'signed by no online key',
+        ],
+        [
+          'fast-forward',
+          doctored('ff', live, (i) => {
+            i['version'] = 9e15;
+          }),
+          'a fast-forward',
+        ],
+        [
+          'nan',
+          doctored('nan', live, (i) => {
+            i['version'] = 'not-a-number';
+          }),
+          'no valid version',
+        ],
+        [
+          'changed',
+          doctored('changed', live, (i) => {
+            const packs = i['packs'] as { versions: { sha256: string }[] }[];
+            const v = packs[0]?.versions[0];
+            if (v !== undefined) v.sha256 = '0'.repeat(64);
+          }),
+          'published with other content',
+        ],
+      ];
+      for (const [name, dir, message] of cases) {
+        const result = signed(join(work, `out-${name}`), dir);
+        expect([name, result.code]).toEqual([name, 1]);
+        expect(result.out).toContain(message);
+      }
+    },
+    T,
+  );
+
+  it(
+    'refuses an artefact tampered with between build and sign, and a missing or foreign key',
+    () => {
+      const cases: [string, (dir: string) => void][] = [
+        [
+          'pack',
+          (dir) => {
+            const index = JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'));
+            const path = join(dir, index.packs[0].versions[0].path);
+            writeFileSync(path, readFileSync(path, 'utf8').replace('"GitHub"', '"GitHub!"'));
+          },
+        ],
+        [
+          'index',
+          (dir) => {
+            const path = join(dir, 'index.json');
+            writeFileSync(path, readFileSync(path, 'utf8').replace('A test version.', 'Edited.'));
+          },
+        ],
+        [
+          'extra',
+          (dir) => writeFileSync(join(dir, 'packs', 'github.com', `${'0'.repeat(64)}.json`), '{}'),
+        ],
+        ['keys', (dir) => writeFileSync(join(dir, 'keys.json'), '{}\n')],
+      ];
+      for (const [what, tamper] of cases) {
+        const dir = join(work, `tampered-${what}`);
+        cpSync(join(work, 'art'), dir, { recursive: true });
+        tamper(dir);
+        const args = ['sign', '--artefact', dir, '--out', `${dir}-out`];
+        const result = signer([...args, '--previous', join(work, 'signed')], {
           REGISTRY_ONLINE_KEY: secret,
-        },
+        });
+        expect([what, result.code]).toEqual([what, 1]);
+        expect(result.out).toContain('refused');
+      }
+      const base = ['sign', '--artefact', join(work, 'art'), '--previous', join(work, 'signed')];
+      expect(signer([...base, '--out', join(work, 'no-secret')]).out).toContain(
+        'REGISTRY_ONLINE_KEY is not set',
       );
-      expect([what, result.code]).toEqual([what, 1]);
-      expect(result.out).toContain('refused');
-    }
-  });
+      const other = secret.replace(/^bhreg1\.[0-9a-f]{16}\./, 'bhreg1.0000000000000000.');
+      expect(
+        signer([...base, '--out', join(work, 'other')], { REGISTRY_ONLINE_KEY: other }).code,
+      ).toBe(1);
+    },
+    T,
+  );
 
-  it('refuses without the secret, or with a key keys.json does not list', () => {
-    const base = ['sign', '--artefact', join(work, 'art'), '--previous', join(work, 'signed')];
-    expect(signer([...base, '--out', join(work, 'no-secret')]).out).toContain(
-      'REGISTRY_ONLINE_KEY is not set',
-    );
-    const other = secret.replace(/^bhreg1\.[0-9a-f]{16}\./, 'bhreg1.0000000000000000.');
-    expect(
-      signer([...base, '--out', join(work, 'other')], { REGISTRY_ONLINE_KEY: other }).code,
-    ).toBe(1);
-  });
+  it(
+    'a preview signs with a throwaway test root that only it trusts',
+    async () => {
+      const preview = join(work, 'preview');
+      const args = ['sign', '--artefact', join(work, 'art'), '--out', preview];
+      expect(signer([...args, '--test-keys', join(work, 'preview-keys')]).code).toBe(0);
+      const pub = JSON.parse(readFileSync(join(work, 'preview-keys', 'test-root.pub'), 'utf8'));
+      expect(pub.test).toBe(true);
+      const testRoot = { keys: [{ keyId: pub.key_id, publicKey: pub.public_key }] };
+      expect((await verify(preview, testRoot)).ok).toBe(true);
+      expect((await verify(preview, root)).ok).toBe(false);
+      expect((await verify(preview, PINNED_TRUST_ROOT)).ok).toBe(false);
+    },
+    T,
+  );
 
-  it('a preview signs with a throwaway test root that only it trusts', async () => {
-    const preview = join(work, 'preview');
-    const result = signer([
-      'sign',
-      '--artefact',
-      join(work, 'art'),
-      '--out',
-      preview,
-      '--test-keys',
-      join(work, 'preview-keys'),
-    ]);
-    expect(result.code).toBe(0);
-    const pub = JSON.parse(readFileSync(join(work, 'preview-keys', 'test-root.pub'), 'utf8'));
-    expect(pub.test).toBe(true);
-    const testRoot = { keys: [{ keyId: pub.key_id, publicKey: pub.public_key }] };
-    expect((await verify(preview, testRoot)).ok).toBe(true);
-    expect((await verify(preview, root)).ok).toBe(false);
-    expect((await verify(preview, PINNED_TRUST_ROOT)).ok).toBe(false);
-  });
-
-  it('carry copies a verified published layout and refuses a doctored one', () => {
-    const out = join(work, 'carried');
-    expect(signer(['carry', '--from', join(work, 'signed'), '--out', out]).code).toBe(0);
-    expect(readFileSync(join(out, 'index.json'))).toEqual(
-      readFileSync(join(work, 'signed', 'index.json')),
-    );
-    const doctored = join(work, 'doctored');
-    cpSync(join(work, 'signed'), doctored, { recursive: true });
-    const index = JSON.parse(readFileSync(join(doctored, 'index.json'), 'utf8'));
-    writeFileSync(join(doctored, index.packs[0].versions[0].path), '{}');
-    expect(signer(['carry', '--from', doctored, '--out', join(work, 'doctored-out')]).code).toBe(1);
-  });
+  it(
+    "carry re-publishes only this commit's verified layout",
+    () => {
+      const live = join(work, 'signed-3');
+      expect(signer(['carry', '--from', live, '--out', join(work, 'carried')]).code).toBe(0);
+      expect(readFileSync(join(work, 'carried', 'index.json'))).toEqual(
+        readFileSync(join(live, 'index.json')),
+      );
+      const broken = join(work, 'broken');
+      cpSync(live, broken, { recursive: true });
+      const index = JSON.parse(readFileSync(join(broken, 'index.json'), 'utf8'));
+      writeFileSync(join(broken, index.packs[0].versions[0].path), '{}');
+      expect(signer(['carry', '--from', broken, '--out', join(work, 'broken-out')]).code).toBe(1);
+      const { privateKey } = generateKeyPairSync('ed25519');
+      const foreign = doctored('carry-foreign', live, unchanged, privateKey, '0123456789abcdef');
+      expect(signer(['carry', '--from', foreign, '--out', join(work, 'foreign-out')]).code).toBe(1);
+      // A newer keys.json in the commit (a rotation or revocation): the old layout is not carried.
+      const paths = { pubDir: join(repo, 'registry', 'keys'), trustRoot: null, test: false };
+      const root2 = readRootKeyFile(join(work, 'offline', 'root-2.key'), PASS);
+      resignKeys(paths, root2, { now: Date.now(), keysDays: 60 });
+      const stale = signer(['carry', '--from', live, '--out', join(work, 'stale-out')]);
+      expect(stale.out).toContain("not this commit's registry/keys/keys.json");
+      git('checkout', '-q', '--', 'registry/keys');
+    },
+    T,
+  );
 });
 
 describe('registry-build --check against a base', () => {
-  it('reports the classification of a pack change and enforces the version rules', () => {
-    git('add', '-A');
-    git('commit', '-q', '--allow-empty', '-m', 'base');
-    const base = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD']).toString().trim();
-    const file = join(repo, 'registry', 'packs', 'github.com.json');
-    const current = JSON.parse(readFileSync(file, 'utf8'));
-    // A changed pack without a new version is refused.
-    writeFileSync(file, canonicalJson({ ...current, guards: current.guards.slice(1) }));
-    const same = build('--check', '--base', base);
-    expect(same.code).toBe(1);
-    expect(same.out).toContain('its version must be above v2');
-    // With a new version and its notes: a classified change.
-    writeFileSync(file, canonicalJson({ ...current, version: 3, guards: current.guards.slice(1) }));
-    writeFileSync(join(repo, 'registry', 'versions', 'github.com.json'), versions(1, 2, 3));
-    const bumped = build('--check', '--base', base);
-    expect(bumped.code).toBe(0);
-    expect(bumped.out).toContain('github.com: v2 → v3 — **loosening**');
-    expect(bumped.out).toContain('| `guards[logout]` |');
+  const head = () => git('rev-parse', 'HEAD').toString().trim();
+  const reset = () => {
     git('checkout', '-q', '--', '.');
-  });
+    git('clean', '-qfd');
+  };
 
-  it('refuses a published version whose content changed', () => {
-    const base = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD']).toString().trim();
-    const file = join(repo, 'registry', 'packs', 'github.com.json');
-    writeFileSync(file, pack(2, 'GitHub, renamed'));
-    git('commit', '-q', '-am', 'edit v2 in place');
-    writeFileSync(file, pack(3, 'GitHub, renamed'));
-    writeFileSync(join(repo, 'registry', 'versions', 'github.com.json'), versions(1, 2, 3));
-    const result = build('--check', '--base', base);
-    expect(result.code).toBe(1);
-    expect(result.out).toContain("github.com v2: a published version's content changed");
-    git('reset', '-q', '--hard', base);
-  });
-  it('refuses to list a version only an intermediate commit of the change held', () => {
-    const base = execFileSync('git', ['-C', repo, 'rev-parse', 'HEAD']).toString().trim();
-    const file = join(repo, 'registry', 'packs', 'github.com.json');
-    writeFileSync(file, pack(3, 'GitHub, never reviewed'));
-    git('commit', '-q', '-am', 'v3 in passing');
-    writeFileSync(file, pack(4, 'GitHub'));
-    writeFileSync(join(repo, 'registry', 'versions', 'github.com.json'), versions(1, 2, 3, 4));
-    const result = build('--check', '--base', base);
-    expect(result.code).toBe(1);
-    expect(result.out).toContain('github.com v3: only the current version (v4)');
-    writeFileSync(join(repo, 'registry', 'versions', 'github.com.json'), versions(1, 2, 4));
-    expect(build('--check', '--base', base).code).toBe(0);
-    git('reset', '-q', '--hard', base);
-  });
+  it(
+    'classifies a pack change and enforces the version rules',
+    () => {
+      const file = join(repo, 'registry', 'packs', 'github.com.json');
+      const current = JSON.parse(readFileSync(file, 'utf8'));
+      writeFileSync(file, canonicalJson({ ...current, guards: current.guards.slice(1) }));
+      const same = build(repo, '--check', '--base', head());
+      expect(same.code).toBe(1);
+      expect(same.out).toContain('its version must be above v2');
+      writeFileSync(
+        file,
+        canonicalJson({ ...current, version: 3, guards: current.guards.slice(1) }),
+      );
+      syncRegistry(repo, '2026-11-21');
+      writeNotes();
+      const bumped = build(repo, '--check', '--base', head());
+      expect(bumped.code).toBe(0);
+      expect(bumped.out).toContain('github.com: v2 → v3 — **loosening**');
+      expect(bumped.out).toContain('| `guards[logout]` |');
+      reset();
+    },
+    T,
+  );
+
+  it(
+    'refuses a published version changed or removed',
+    () => {
+      const versionsPath = join(repo, 'registry', 'versions', 'github.com.json');
+      const meta = JSON.parse(readFileSync(versionsPath, 'utf8'));
+      const archive = join(repo, 'registry', 'archive', 'github.com');
+      const oldSha: string = meta.versions['1'].sha256;
+      const v1 = pack(1, 'GitHub one, edited');
+      const sha = createHash('sha256').update(v1).digest('hex');
+      writeFileSync(join(archive, `${sha}.json`), v1);
+      rmSync(join(archive, `${oldSha}.json`));
+      const edited = { ...meta.versions['1'], sha256: sha };
+      writeFileSync(
+        versionsPath,
+        canonicalJson({ ...meta, versions: { ...meta.versions, 1: edited } }),
+      );
+      const changed = build(repo, '--check', '--base', head());
+      expect(changed.code).toBe(1);
+      expect(changed.out).toContain("github.com v1: a published version's content changed");
+      reset();
+      rmSync(join(archive, `${oldSha}.json`));
+      const { 1: _dropped, ...rest } = meta.versions;
+      writeFileSync(versionsPath, canonicalJson({ ...meta, versions: rest }));
+      expect(build(repo, '--check', '--base', head()).out).toContain(
+        'github.com v1: a published version cannot be removed',
+      );
+      reset();
+    },
+    T,
+  );
 });
 
-describe('registry-keys.ts', () => {
-  it('dry-run rehearses the ceremony and verifies a signed build with core', () => {
-    const result = run(process.execPath, [
-      join(REPO, 'scripts', 'registry-keys.ts'),
-      'dry-run',
-      '--out',
-      join(work, 'dry'),
-      '--layout',
-      join(work, 'art'),
-    ]);
-    expect(result.code).toBe(0);
-    expect(result.out).toContain('throwaway root: accepted');
-    expect(result.out).toContain('pinned root: refused');
-    expect(result.out).toMatch(/throwaway root: valid \(2 of 2 pack files verified\)/);
-    expect(result.out).not.toContain('PRIVATE KEY');
+describe('registry-keys.mjs', () => {
+  it('imports nothing but Node built-ins (no repository file, no package)', () => {
+    const source = readFileSync(join(REPO, 'scripts', 'registry-keys.mjs'), 'utf8');
+    const specifiers = [
+      ...source.matchAll(/^\s*(?:import|export)\s[^'"]*?from\s+['"]([^'"]+)['"]/gm),
+    ].map((m) => m[1] ?? '');
+    expect(specifiers.length).toBeGreaterThan(0);
+    expect(specifiers.filter((s) => !s.startsWith('node:'))).toEqual([]);
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    expect(code).not.toMatch(/\bimport\s*\(/);
+    expect(code).not.toMatch(/\brequire\s*\(/);
   });
 
-  it('online-key, sign-keys, revoke and status work on the repository, offline', () => {
-    const passFile = join(work, 'pass-ops.txt');
-    writeFileSync(passFile, `${PASS}\n`);
-    const keys = (...args: string[]) =>
-      run(process.execPath, [
-        join(REPO, 'scripts', 'registry-keys.ts'),
-        ...args,
-        '--repo',
-        repo,
-        '--passphrase-file',
-        passFile,
-      ]);
-    const version = () =>
-      JSON.parse(readFileSync(join(repo, 'registry', 'keys', 'keys.json'), 'utf8')).version;
-    const before = version();
-    const added = keys(
-      'online-key',
-      '--root',
-      join(work, 'offline', 'root-2.key'),
-      '--secret-out',
-      join(work, 'offline', 'next.secret'),
-    );
-    expect(added.code).toBe(0);
-    expect(added.out).toContain('gh secret set REGISTRY_ONLINE_KEY --env registry-signing');
-    expect(readFileSync(join(work, 'offline', 'next.secret'), 'utf8')).toStartWith('bhreg1.');
-    expect(version()).toBe(before + 1);
-    const listed = JSON.parse(
-      readFileSync(join(repo, 'registry', 'keys', 'keys.json'), 'utf8'),
-    ).online;
-    expect(listed).toHaveLength(2);
-    expect(
-      keys('revoke', '--root', join(work, 'offline', 'root-1.key'), '--key-id', listed[0].key_id)
-        .code,
-    ).toBe(0);
-    expect(
-      keys('sign-keys', '--root', join(work, 'offline', 'root-1.key'), '--keys-days', '121').out,
-    ).toContain('at most 120 days');
-    expect(keys('sign-keys', '--root', join(work, 'offline', 'root-1.key')).code).toBe(0);
-    expect(version()).toBe(before + 3);
-    // The secret file is never overwritten.
-    expect(
-      keys(
+  it(
+    'works from the command line with plain node; dry-run is verified by core in another process',
+    () => {
+      const passFile = join(work, 'pass.txt');
+      writeFileSync(passFile, `${PASS}\n`);
+      const tool = join(REPO, 'scripts', 'registry-keys.mjs');
+      const keys = (...args: string[]) =>
+        run(NODE, [tool, ...args, '--repo', repo, '--passphrase-file', passFile]);
+      const keysJson = join(repo, 'registry', 'keys', 'keys.json');
+      const before = JSON.parse(readFileSync(keysJson, 'utf8')).version;
+      const secretOut = join(work, 'offline', 'next.secret');
+      const added = keys(
         'online-key',
         '--root',
-        join(work, 'offline', 'root-1.key'),
+        join(work, 'offline', 'root-2.key'),
         '--secret-out',
-        join(work, 'offline', 'next.secret'),
-      ).code,
-    ).toBe(1);
-    const status = run(process.execPath, [
-      join(REPO, 'scripts', 'registry-keys.ts'),
-      'status',
-      '--repo',
-      repo,
-    ]);
-    expect(status.out).toContain(`keys.json version ${before + 3}`);
-    git('checkout', '-q', '--', 'registry/keys');
-  });
-
-  it('never writes a private key inside a git working tree', () => {
-    const passFile = join(work, 'pass.txt');
-    writeFileSync(passFile, `${PASS}\n`);
-    const inside = join(repo, 'keys-here');
-    const result = run(process.execPath, [
-      join(REPO, 'scripts', 'registry-keys.ts'),
-      'init-roots',
-      '--out',
-      inside,
-      '--repo',
-      repo,
-      '--passphrase-file',
-      passFile,
-    ]);
-    expect(result.code).toBe(1);
-    expect(result.out).toContain('inside a git working tree');
-  });
+        secretOut,
+      );
+      expect(added.out).toContain('gh secret set REGISTRY_ONLINE_KEY --env registry-signing');
+      expect(JSON.parse(readFileSync(keysJson, 'utf8')).version).toBe(before + 1);
+      // The secret file is never overwritten; keys.json lives at most 120 days.
+      expect(
+        keys('online-key', '--root', join(work, 'offline', 'root-1.key'), '--secret-out', secretOut)
+          .code,
+      ).toBe(1);
+      expect(
+        keys('sign-keys', '--root', join(work, 'offline', 'root-1.key'), '--keys-days', '121').out,
+      ).toContain('at most 120 days');
+      expect(keys('status').out).toContain('keys.json verifies under the root keys');
+      expect(keys('init-roots', '--out', join(repo, 'keys-here')).out).toContain(
+        'inside a git working tree',
+      );
+      git('checkout', '-q', '--', 'registry/keys');
+      const dry = run(NODE, [
+        tool,
+        'dry-run',
+        '--out',
+        join(work, 'dry'),
+        '--layout',
+        join(work, 'art'),
+      ]);
+      expect(dry.code).toBe(0);
+      expect(dry.out).toContain('throwaway root: accepted');
+      expect(dry.out).toContain('pinned root: pins none of them');
+      const checked = run(process.execPath, [
+        join(REPO, 'scripts', 'registry-verify.ts'),
+        join(work, 'dry', 'layout'),
+        '--test-root',
+        join(work, 'dry', 'registry-keys', 'root-1.pub'),
+        '--test-root',
+        join(work, 'dry', 'registry-keys', 'root-2.pub'),
+        '--expect-pinned-refusal',
+      ]);
+      expect(checked.out).toContain('2 of 2 pack files verified');
+      expect(checked.code).toBe(0);
+    },
+    T,
+  );
 });

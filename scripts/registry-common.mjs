@@ -2,13 +2,12 @@
 /**
  * @module scripts/registry-common — the site-pack registry's shared, dependency-free producer code
  * (spec 13 §10.1, §10.2, §10.7): canonical JSON, Ed25519 with `node:crypto`, the root public keys
- * in `registry/keys/`, and the deterministic assembly of the unsigned index from `registry/` and
- * its git history. `registry-build.ts` (with dependencies) and `registry-sign.mjs` (without) both
- * call `collectRegistry`, so the signing job recomputes from the commit exactly what the build
- * produced and can diff the two. Imports only `node:crypto`, `node:fs`, `node:path` and
- * `node:child_process` (to read earlier versions with the `git` the checkout already uses).
+ * in `registry/keys/`, `registry/state.json`, and the deterministic assembly of the unsigned index
+ * from `registry/` and its archive of published versions (no git history, D-81).
+ * `registry-build.ts` (with dependencies) and `registry-sign.mjs` (without) both call
+ * `collectRegistry`, so the signing job recomputes from the commit exactly what the build produced
+ * and can diff the two. Imports only `node:crypto`, `node:fs` and `node:path`.
  */
-import { execFileSync } from 'node:child_process';
 import {
   createHash,
   createPrivateKey,
@@ -17,7 +16,7 @@ import {
   sign,
   verify,
 } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const DAY_MS = 24 * 3_600_000;
@@ -220,74 +219,27 @@ export function readRootKeys(dir) {
 }
 
 /**
- * Runs `git` in `root` and returns stdout as bytes.
- *
- * @param {string} root
- * @param {string[]} args
- * @returns {Buffer}
+ * @typedef {{ read(path: string): Buffer | null, list(dir: string): string[] }} TreeReader
+ *   Reads repository files by POSIX path relative to the root: the working tree
+ *   ({@link fsReader}), or a commit (`registry/check.ts` reads the base through `git`).
  */
-function git(root, args) {
-  return execFileSync('git', ['-C', root, ...args], {
-    maxBuffer: 64 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-}
 
-/**
- * Refuses a shallow clone in CI: the listed versions come from history, so the build and the
- * signing job both need all of it (`actions/checkout` with `fetch-depth: 0`). Elsewhere (a
- * developer's shallow clone) it only warns: older versions may then be missing from the output.
- *
- * @param {string} root
- */
-export function requireFullHistory(root) {
-  const shallow = git(root, ['rev-parse', '--is-shallow-repository']).toString('utf8').trim();
-  if (shallow !== 'true') return;
-  if (process.env['CI'] === 'true') {
-    throw new Error('the registry needs the full git history (actions/checkout fetch-depth: 0)');
-  }
-  console.warn('registry: this clone is shallow; versions older than its history are left out');
-}
-
-/**
- * A file at `ref` (`null`: the working tree), or `null` when it does not exist there.
- *
- * @param {string} root
- * @param {string | null} ref
- * @param {string} path relative, POSIX
- * @returns {Buffer | null}
- */
-function readAt(root, ref, path) {
-  if (ref === null) {
-    const full = join(root, path);
-    return existsSync(full) ? readFileSync(full) : null;
-  }
-  try {
-    return git(root, ['show', `${ref}:${path}`]);
-  } catch {
-    return null;
-  }
-}
-
-/** @param {string} root @param {string | null} ref @param {string} dir @returns {string[]} */
-function listAt(root, ref, dir) {
-  if (ref === null) {
-    const full = join(root, dir);
-    return existsSync(full) ? readdirSync(full).sort() : [];
-  }
-  try {
-    return git(root, ['ls-tree', '--name-only', `${ref}:${dir}`])
-      .toString('utf8')
-      .split('\n')
-      .filter((n) => n !== '')
-      .sort();
-  } catch {
-    return [];
-  }
+/** The working tree at `root`. @param {string} root @returns {TreeReader} */
+export function fsReader(root) {
+  return {
+    read(path) {
+      const full = join(root, ...path.split('/'));
+      return existsSync(full) && statSync(full).isFile() ? readFileSync(full) : null;
+    },
+    list(dir) {
+      const full = join(root, ...dir.split('/'));
+      return existsSync(full) && statSync(full).isDirectory() ? readdirSync(full).sort() : [];
+    },
+  };
 }
 
 /** @param {Uint8Array} bytes @returns {Record<string, unknown> | null} */
-function objectOf(bytes) {
+export function objectOf(bytes) {
   try {
     const value = JSON.parse(Buffer.from(bytes).toString('utf8'));
     return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
@@ -296,36 +248,30 @@ function objectOf(bytes) {
   }
 }
 
+/** A registrable domain as the index schema accepts it (`PackRegistrableDomain`). */
+export const PACK_ID_RE =
+  /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
+/** The highest pack version the index schema accepts. */
+export const MAX_PACK_VERSION = 1_000_000;
+/** Listed packs at most. */
+export const MAX_PACKS = 500;
+/** The fast-forward bound of the client (spec 13 §10.3). */
+export const INDEX_FAST_FORWARD = 100_000;
+
 /**
- * Every version of `registry/packs/<id>.json` reachable from `ref` (`null`: HEAD), the bytes of
- * the newest commit that held each version.
+ * `registry/state.json`: the last index version the owner recorded as published (a floor the
+ * signing job never goes below, D-81). `null` when the file is missing or malformed.
  *
- * @param {string} root
- * @param {string | null} ref
- * @param {string} id
- * @returns {Map<number, Buffer>}
+ * @param {TreeReader} reader
+ * @returns {{ index_version: number } | null}
  */
-export function packHistory(root, ref, id) {
-  const path = `registry/packs/${id}.json`;
-  /** @type {Map<number, Buffer>} */
-  const versions = new Map();
-  /** @type {string[]} */
-  let commits = [];
-  try {
-    commits = git(root, ['log', '--full-history', '--format=%H', ref ?? 'HEAD', '--', path])
-      .toString('utf8')
-      .split('\n')
-      .filter((c) => c !== '');
-  } catch {
-    commits = [];
-  }
-  for (const commit of commits) {
-    const bytes = readAt(root, commit, path);
-    const version = bytes === null ? undefined : objectOf(bytes)?.['version'];
-    if (bytes === null || typeof version !== 'number' || versions.has(version)) continue;
-    versions.set(version, bytes);
-  }
-  return versions;
+export function readState(reader) {
+  const bytes = reader.read('registry/state.json');
+  const state = bytes === null ? null : objectOf(bytes);
+  const version = state?.['index_version'];
+  return typeof version === 'number' && Number.isSafeInteger(version) && version >= 0
+    ? { index_version: version }
+    : null;
 }
 
 /**
@@ -334,98 +280,142 @@ export function packHistory(root, ref, id) {
  * @typedef {{ id: string, title: string, versions: IndexVersion[] }} IndexPack
  * @typedef {{ schema: 1, packs: IndexPack[] }} UnsignedIndex
  * @typedef {{ index: UnsignedIndex, files: Map<string, Buffer>, current: Map<string, Buffer>,
- *   problems: string[] }} CollectedRegistry
+ *   listed: Map<string, Map<number, string>>, problems: string[] }} CollectedRegistry
  */
 
 /**
- * Assembles the unsigned index of `registry/` at `ref` (`null`: the working tree and HEAD's
- * history): one entry per `registry/packs/<id>.json`; its listed versions are the entries of
- * `registry/versions/<id>.json` (newest ten), each with the bytes of the newest commit that held
- * that version (the current one from the file itself). Validation of the pack content is the
- * build's (`registry-build.ts`, with core); this only reports what it cannot assemble.
+ * Assembles the unsigned index of `registry/` (spec 13 §10.1, D-81): one entry per
+ * `registry/packs/<id>.json`; its listed versions are the entries of `registry/versions/<id>.json`
+ * (the newest ten), each the exact bytes of `registry/archive/<id>/<sha256>.json`, so nothing
+ * depends on git history. The current file must equal its version's archived copy. Validation of
+ * the pack content is the build's (`registry-build.ts`, with core); this checks what the index
+ * schema bounds and what it cannot assemble, so the dependency-free signing job enforces it too.
  *
- * @param {string} root the repository
- * @param {string | null} [ref]
+ * @param {TreeReader} reader
  * @returns {CollectedRegistry}
  */
-export function collectRegistry(root, ref = null) {
+export function collectRegistry(reader) {
   /** @type {string[]} */
   const problems = [];
   /** @type {Map<string, Buffer>} */
   const files = new Map();
   /** @type {Map<string, Buffer>} */
   const current = new Map();
+  /** @type {Map<string, Map<number, string>>} */
+  const listed = new Map();
   /** @type {IndexPack[]} */
   const packs = [];
-  const ids = listAt(root, ref, 'registry/packs')
+  const ids = reader
+    .list('registry/packs')
     .filter((n) => n.endsWith('.json'))
     .map((n) => n.slice(0, -'.json'.length));
+  if (ids.length > MAX_PACKS) problems.push(`more than ${MAX_PACKS} packs`);
+  for (const dir of reader.list('registry/archive')) {
+    if (!ids.includes(dir)) problems.push(`registry/archive/${dir}: no registry/packs/${dir}.json`);
+  }
   for (const id of ids) {
-    const bytes = readAt(root, ref, `registry/packs/${id}.json`);
+    const bytes = reader.read(`registry/packs/${id}.json`);
     const pack = bytes === null ? null : objectOf(bytes);
-    if (bytes === null || pack === null || typeof pack['version'] !== 'number') {
+    const version = pack?.['version'];
+    if (!PACK_ID_RE.test(id) || id.length > 253) {
+      problems.push(`registry/packs/${id}.json: not a registrable domain`);
+      continue;
+    }
+    if (bytes === null || pack === null || typeof version !== 'number') {
       problems.push(`registry/packs/${id}.json: not a pack`);
       continue;
     }
     current.set(id, bytes);
-    const metaBytes = readAt(root, ref, `registry/versions/${id}.json`);
-    const meta = metaBytes === null ? null : objectOf(metaBytes);
+    const metaBytes = reader.read(`registry/versions/${id}.json`);
     const entries = /** @type {Record<string, Record<string, unknown>> | undefined} */ (
-      meta?.['versions']
+      (metaBytes === null ? null : objectOf(metaBytes))?.['versions']
     );
-    if (meta === null || entries === undefined || typeof entries !== 'object') {
+    if (entries === undefined || entries === null || typeof entries !== 'object') {
       problems.push(`registry/versions/${id}.json: missing (list each published version)`);
       continue;
     }
-    const history = packHistory(root, ref, id);
-    history.set(pack['version'], bytes);
-    const listed = Object.keys(entries)
+    /** @type {Map<number, string>} */
+    const shas = new Map();
+    listed.set(id, shas);
+    const all = Object.keys(entries)
       .map(Number)
-      .filter((v) => Number.isInteger(v) && v >= 1)
+      .filter((v) => Number.isInteger(v))
       .sort((a, b) => b - a);
-    if (!listed.includes(pack['version'])) {
+    if (!all.includes(version)) {
       problems.push(
-        `registry/versions/${id}.json: no entry for the current version ${pack['version']}`,
+        `registry/versions/${id}.json: no entry for the current version ${version} (bun scripts/registry-build.ts --sync)`,
       );
     }
     /** @type {IndexVersion[]} */
     const versions = [];
-    for (const v of listed.filter((x) => x <= Number(pack['version'])).slice(0, MAX_VERSIONS)) {
+    for (const v of all) {
       const entry = entries[String(v)] ?? {};
-      const versionBytes = history.get(v);
-      if (versionBytes === undefined) {
+      const where = `registry/versions/${id}.json version ${v}`;
+      const sha256 = entry['sha256'];
+      if (v < 1 || v > MAX_PACK_VERSION) {
+        problems.push(`${where}: versions run from 1 to ${MAX_PACK_VERSION}`);
+        continue;
+      }
+      if (v > version) {
+        problems.push(`${where}: above the current version ${version}`);
+        continue;
+      }
+      if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) {
         problems.push(
-          `registry/versions/${id}.json: version ${v} is in no commit of registry/packs/${id}.json`,
+          `${where}: needs the sha256 of its archived file (bun scripts/registry-build.ts --sync)`,
         );
         continue;
       }
-      const body = objectOf(versionBytes) ?? {};
-      const sha256 = sha256Hex(versionBytes);
-      const path = `packs/${id}/${sha256}.json`;
+      shas.set(v, sha256);
+      const archived = reader.read(`registry/archive/${id}/${sha256}.json`);
+      if (archived === null) {
+        problems.push(`${where}: registry/archive/${id}/${sha256}.json is missing`);
+        continue;
+      }
+      const body = objectOf(archived) ?? {};
+      if (sha256Hex(archived) !== sha256)
+        problems.push(`registry/archive/${id}/${sha256}.json: its SHA-256 is not its name`);
+      if (body['id'] !== id || body['version'] !== v)
+        problems.push(`registry/archive/${id}/${sha256}.json: is not ${id} v${v}`);
+      if (archived.byteLength > PACK_MAX_BYTES)
+        problems.push(`registry/archive/${id}/${sha256}.json: larger than ${PACK_MAX_BYTES} bytes`);
+      if (v === version && !archived.equals(bytes)) {
+        problems.push(
+          `registry/packs/${id}.json differs from its archived copy of v${v} (bun scripts/registry-build.ts --sync)`,
+        );
+      }
       const released = entry['released'];
       const notes = entry['notes'];
       if (typeof released !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(released)) {
-        problems.push(`registry/versions/${id}.json: version ${v} needs released (YYYY-MM-DD)`);
+        problems.push(`${where}: needs released (YYYY-MM-DD)`);
       }
-      if (typeof notes !== 'string' || notes.length > NOTES_MAX) {
-        problems.push(
-          `registry/versions/${id}.json: version ${v} needs notes (at most ${NOTES_MAX} characters)`,
-        );
+      if (typeof notes !== 'string' || notes.length < 1 || notes.length > NOTES_MAX) {
+        problems.push(`${where}: needs notes (1 to ${NOTES_MAX} characters)`);
       }
+      if (versions.length >= MAX_VERSIONS) continue;
+      const path = `packs/${id}/${sha256}.json`;
       versions.push({
         v,
         min_client: String(body['min_client']),
         ...(typeof body['max_client'] === 'string' && { max_client: body['max_client'] }),
         sha256,
-        size: versionBytes.byteLength,
+        size: archived.byteLength,
         path,
         released: String(released),
         notes: String(notes),
         ...(entry['revoked'] === true && { revoked: true }),
       });
-      files.set(path, versionBytes);
+      files.set(path, archived);
     }
-    if (versions.length > 0) packs.push({ id, title: String(pack['title']), versions });
+    const referenced = new Set([...shas.values()].map((sha) => `${sha}.json`));
+    for (const name of reader.list(`registry/archive/${id}`)) {
+      if (!referenced.has(name))
+        problems.push(`registry/archive/${id}/${name}: listed in no registry/versions entry`);
+    }
+    const title = pack['title'];
+    if (typeof title !== 'string' || title.length < 1 || title.length > 60)
+      problems.push(`registry/packs/${id}.json: title`);
+    if (versions.length > 0) packs.push({ id, title: String(title), versions });
   }
-  return { index: { schema: 1, packs }, files, current, problems };
+  return { index: { schema: 1, packs }, files, current, listed, problems };
 }

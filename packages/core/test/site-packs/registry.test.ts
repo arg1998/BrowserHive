@@ -1,15 +1,16 @@
-/** @module test/site-packs/registry.test — the registry's source of truth, `registry/packs/<id>.json` (spec 13 §9.8, §10.7): every file passes the schema and the refinements, is named for its id, and is canonical JSON (keys sorted at every level, two-space indentation and a final newline), so diffs stay stable and the published bytes are the reviewed ones; `registry/versions/<id>.json` lists the current version with its release date and notes. The full check (history, base comparison, classification) is `bun scripts/registry-build.ts --check`. An empty folder passes. */
+/** @module test/site-packs/registry.test — the registry's source of truth, `registry/packs/<id>.json` (spec 13 §9.8, §10.7): every file passes the schema and the refinements, is named for its id, and is canonical JSON (keys sorted at every level, two-space indentation and a final newline), so diffs stay stable and the published bytes are the reviewed ones; `registry/versions/<id>.json` lists the current version with its release date and notes, and every listed version is archived byte for byte in `registry/archive/<id>/<sha256>.json`. The full check (history, base comparison, classification) is `bun scripts/registry-build.ts --check`. An empty folder passes. */
 
 import { describe, expect, it } from 'bun:test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
-import { issuesText, loadPackBytes } from '../../src/domain/site-packs/load.ts';
+import { issuesText, loadPackBytes, sha256Hex } from '../../src/domain/site-packs/load.ts';
 
 /** `registry/packs` at the repository root (this file lives at packages/core/test/site-packs). */
 const PACKS = resolve(import.meta.dir, '..', '..', '..', '..', 'registry', 'packs');
-/** `registry/versions` beside it. */
+/** `registry/versions` and `registry/archive` beside it. */
 const VERSIONS = resolve(PACKS, '..', 'versions');
+const ARCHIVE = resolve(PACKS, '..', 'archive');
 /** The release the bundled packs target. */
 const BINARY = '0.3.0';
 
@@ -34,6 +35,7 @@ const Versions = z.strictObject({
   versions: z.record(
     z.string(),
     z.strictObject({
+      sha256: z.string().regex(/^[0-9a-f]{64}$/),
       released: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       notes: z.string().min(1).max(500),
       revoked: z.literal(true).optional(),
@@ -82,6 +84,13 @@ describe('registry/packs', () => {
         const listed = Versions.parse(JSON.parse(versionsText)).versions;
         const version = z.object({ version: z.number() }).parse(JSON.parse(text)).version;
         expect(Object.keys(listed)).toContain(String(version));
+        // Every listed version is archived byte for byte; the current one is this file.
+        for (const [v, entry] of Object.entries(listed)) {
+          const archived = new Uint8Array(readFileSync(join(ARCHIVE, id, `${entry.sha256}.json`)));
+          expect(sha256Hex(archived)).toBe(entry.sha256);
+          if (v === String(version))
+            expect(Buffer.from(archived).equals(Buffer.from(bytes))).toBe(true);
+        }
       });
     });
   }

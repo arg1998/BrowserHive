@@ -42,6 +42,11 @@ export interface SignedLayoutReport {
   readonly index: Verified<RegistryIndexV1> | null;
   /** The first refusal of the chain (keys or index), `null` when the chain verified. */
   readonly refusal: RegistryRefusal | null;
+  /**
+   * The `index_floor` that replaced the stored index floor for this check, `null` when none did.
+   * A client that accepts the layout stores it as its new floor (with the keys version).
+   */
+  readonly indexFloorApplied?: number | null;
   readonly packs: readonly LayoutPackResult[];
 }
 
@@ -73,6 +78,23 @@ async function readChecked(
   return { bytes };
 }
 
+/**
+ * The index floor of a check (spec 13 §10.3 step 1, review #97 M2): `keys.json`'s `index_floor`
+ * replaces the stored floor only when that `keys.json` is newer than the stored keys version (or
+ * none is stored), so one root-signed reset is honoured once, never again on a repeated or older
+ * `keys.json`.
+ */
+export function indexFloorOf(
+  keys: RegistryKeysV1,
+  floors: RegistryFloors,
+): { readonly floor: number | null; readonly applied: number | null } {
+  const newer = floors.keysVersion === null || keys.version > floors.keysVersion;
+  if (keys.index_floor !== undefined && newer) {
+    return { floor: keys.index_floor, applied: keys.index_floor };
+  }
+  return { floor: floors.indexVersion, applied: null };
+}
+
 /** Verifies a signed layout. Never throws. */
 export async function verifySignedLayout(input: VerifyLayoutInput): Promise<SignedLayoutReport> {
   const failed = (
@@ -98,13 +120,13 @@ export async function verifySignedLayout(input: VerifyLayoutInput): Promise<Sign
   if ('refusal' in indexFile) return failed(indexFile.refusal, keys.value);
   const indexSig = await readChecked(input.read, 'index.json.sig', SIG_READ_MAX);
   if ('refusal' in indexSig) return failed(indexSig.refusal, keys.value);
+  const indexFloor = indexFloorOf(keys.value.value, floors);
   const index = verifyIndex({
     bytes: indexFile.bytes,
     sig: indexSig.bytes,
     keys: keys.value.value,
     now: input.now,
-    // `index_floor` resets the stored floor (the only way down after a fast-forward attack).
-    floor: keys.value.value.index_floor ?? floors.indexVersion,
+    floor: indexFloor.floor,
   });
   if (!index.ok) return failed(index.error, keys.value);
 
@@ -142,5 +164,12 @@ export async function verifySignedLayout(input: VerifyLayoutInput): Promise<Sign
     }
   }
   const ok = packs.every((p) => p.status === 'ok' || p.status === 'other_client');
-  return { ok, keys: keys.value, index: index.value, refusal: null, packs };
+  return {
+    ok,
+    keys: keys.value,
+    index: index.value,
+    refusal: null,
+    packs,
+    indexFloorApplied: indexFloor.applied,
+  };
 }

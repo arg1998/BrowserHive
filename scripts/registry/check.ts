@@ -1,6 +1,7 @@
-/** @module scripts/registry/check — what `registry-build.ts` checks before it writes or a pull request merges (spec 13 §10.7): every pack and every listed version against the schema and refinements (core's `loadPackBytes`), canonical JSON, the version metadata, the size caps, the root keys and `keys.json`, the pinned trust root, and against a base commit: a changed pack has a higher version, listed versions keep their bytes, only the current version is new, and each change is classified (`classifyPackChange`). */
+/** @module scripts/registry/check — what `registry-build.ts` checks before it writes or a pull request merges (spec 13 §10.7, D-81): every pack and every archived version against the schema and refinements (core's `loadPackBytes`), canonical JSON, the version metadata and `registry/state.json`, the size caps, the root keys and `keys.json`, the pinned trust root, and against a base commit (read with `git`): a changed pack has a higher version, a published version is never changed or removed, new versions are above every published one, and each change is classified (`classifyPackChange`). The registry itself is read from the tree only, never from history, so a squash merge changes nothing. */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SitePackV1 } from '@browserhive/contracts/site-packs';
 import {
@@ -14,12 +15,13 @@ import {
   type CollectedRegistry,
   canonicalJson,
   collectRegistry,
+  fsReader,
   INDEX_MAX_BYTES,
   NOTES_MAX,
-  packHistory,
   type RootKeys,
   readRootKeys,
-  sha256Hex,
+  readState,
+  type TreeReader,
   verifiedBy,
 } from '../registry-common.mjs';
 
@@ -27,8 +29,9 @@ import {
 const VersionsFile = z.strictObject({
   schema: z.literal(1),
   versions: z.record(
-    z.string().regex(/^[1-9]\d{0,6}$/),
+    z.string().regex(/^(?:[1-9]\d{0,5}|1000000)$/),
     z.strictObject({
+      sha256: z.string().regex(/^[0-9a-f]{64}$/),
       released: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       notes: z.string().min(1).max(NOTES_MAX),
       revoked: z.literal(true).optional(),
@@ -91,48 +94,70 @@ function canonicalProblem(path: string, text: string): string | null {
   try {
     return canonicalJson(JSON.parse(text)) === text
       ? null
-      : `${path}: not canonical JSON (sorted keys, two spaces, final newline; bun scripts/registry-build.ts --format)`;
+      : `${path}: not canonical JSON (sorted keys, two spaces, final newline; bun scripts/registry-build.ts --sync)`;
   } catch {
     return `${path}: not JSON`;
   }
 }
 
-function checkFiles(repo: string, collected: CollectedRegistry, errors: string[]): void {
+const StateFile = z.strictObject({
+  schema: z.literal(1),
+  index_version: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  note: z.string().max(500).optional(),
+});
+
+function checkJsonFile(
+  reader: TreeReader,
+  path: string,
+  schema: z.ZodType,
+  errors: string[],
+): void {
+  const bytes = reader.read(path);
+  if (bytes === null) {
+    errors.push(`${path}: missing`);
+    return;
+  }
+  const text = bytes.toString('utf8');
+  const problem = canonicalProblem(path, text);
+  if (problem !== null) {
+    errors.push(problem);
+    return;
+  }
+  const parsed = schema.safeParse(JSON.parse(text));
+  if (!parsed.success) {
+    errors.push(
+      `${path}: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+    );
+  }
+}
+
+function checkFiles(reader: TreeReader, collected: CollectedRegistry, errors: string[]): void {
   for (const [id, bytes] of collected.current) {
     const path = `registry/packs/${id}.json`;
     const problem = canonicalProblem(path, Buffer.from(bytes).toString('utf8'));
     if (problem !== null) errors.push(problem);
     packOf(bytes, id, path, errors);
+    checkJsonFile(reader, `registry/versions/${id}.json`, VersionsFile, errors);
   }
-  for (const pack of collected.index.packs) {
-    for (const entry of pack.versions) {
-      const bytes = collected.files.get(entry.path);
-      if (bytes !== undefined && !collected.current.get(pack.id)?.equals(bytes)) {
-        packOf(bytes, pack.id, `${pack.id} v${entry.v} (from history)`, errors);
-      }
+  // Every archived version, listed in the index or not, is a valid canonical pack.
+  for (const [id, shas] of collected.listed) {
+    for (const [v, sha] of shas) {
+      const path = `registry/archive/${id}/${sha}.json`;
+      const bytes = reader.read(path);
+      if (bytes === null) continue;
+      const problem = canonicalProblem(path, bytes.toString('utf8'));
+      if (problem !== null) errors.push(problem);
+      if (!collected.current.get(id)?.equals(bytes))
+        packOf(bytes, id, `${id} v${v} (${path})`, errors);
     }
   }
-  const versionsDir = join(repo, 'registry', 'versions');
-  for (const name of existsSync(versionsDir) ? readdirSync(versionsDir).sort() : []) {
-    const path = `registry/versions/${name}`;
+  for (const name of reader.list('registry/versions')) {
     const id = name.replace(/\.json$/, '');
     if (!name.endsWith('.json') || !collected.current.has(id)) {
-      errors.push(`${path}: no registry/packs/${id}.json`);
-      continue;
-    }
-    const text = readFileSync(join(versionsDir, name), 'utf8');
-    const problem = canonicalProblem(path, text);
-    if (problem !== null) {
-      errors.push(problem);
-      continue;
-    }
-    const parsed = VersionsFile.safeParse(JSON.parse(text));
-    if (!parsed.success) {
-      errors.push(
-        `${path}: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
-      );
+      errors.push(`registry/versions/${name}: no registry/packs/${id}.json`);
     }
   }
+  checkJsonFile(reader, 'registry/state.json', StateFile, errors);
   // The signed index adds version, issued_at and expires: well under 200 bytes.
   const size = Buffer.byteLength(canonicalJson(collected.index)) + 200;
   if (size > INDEX_MAX_BYTES)
@@ -154,7 +179,7 @@ function checkKeys(
   const files = roots.keys.map((k) => `${k.key_id}:${k.public_key}`).sort();
   if (pinned.join() !== files.join()) {
     errors.push(
-      `${TRUST_ROOT} does not pin registry/keys/root-*.pub (registry-keys.ts init-roots)`,
+      `${TRUST_ROOT} does not pin registry/keys/root-*.pub (registry-keys.mjs init-roots)`,
     );
   }
   if (roots.placeholder)
@@ -193,43 +218,41 @@ function checkKeys(
 }
 
 function compare(
-  repo: string,
-  baseRef: string,
   head: CollectedRegistry,
   base: CollectedRegistry,
+  baseState: number | null,
+  headState: number | null,
   errors: string[],
 ): PackChange[] {
   const changes: PackChange[] = [];
-  const baseListed = new Map(
-    base.index.packs.map((p) => [p.id, new Map(p.versions.map((v) => [v.v, v.sha256]))]),
-  );
+  if (baseState !== null && headState !== null && headState < baseState) {
+    errors.push(`registry/state.json: index_version went down from ${baseState} to ${headState}`);
+  }
+  for (const [id, before] of base.listed) {
+    const after = head.listed.get(id);
+    if (after === undefined) continue; // the pack was removed (reported below)
+    for (const [v, sha] of before) {
+      const now = after.get(v);
+      if (now === undefined) {
+        errors.push(`${id} v${v}: a published version cannot be removed (mark it "revoked": true)`);
+      } else if (now !== sha) {
+        errors.push(
+          `${id} v${v}: a published version's content changed; give the change a new version`,
+        );
+      }
+    }
+    const highest = Math.max(0, ...before.keys());
+    for (const v of after.keys()) {
+      if (!before.has(v) && v <= highest) {
+        errors.push(`${id} v${v}: a new version must be above every published one (v${highest})`);
+      }
+    }
+  }
   for (const [id, bytes] of head.current) {
     const headPack = packOf(bytes, id, `registry/packs/${id}.json`, []);
     const baseBytes = base.current.get(id);
     const basePack = baseBytes === undefined ? null : packOf(baseBytes, id, `base ${id}`, []);
     if (headPack === null) continue;
-    const listed = head.index.packs.find((p) => p.id === id)?.versions ?? [];
-    const before = baseListed.get(id);
-    for (const entry of listed) {
-      const sha = before?.get(entry.v);
-      if (sha !== undefined && sha !== entry.sha256) {
-        errors.push(
-          `${id} v${entry.v}: a published version's content changed; give the change a new version`,
-        );
-      }
-      // A newly listed earlier version must be content the base already held: commits inside the
-      // pull request cannot publish what its final diff does not show.
-      const committed = packHistory(repo, baseRef, id).get(entry.v);
-      if (
-        sha === undefined &&
-        entry.v !== headPack.version &&
-        (committed === undefined || sha256Hex(committed) !== entry.sha256)
-      ) {
-        errors.push(
-          `${id} v${entry.v}: only the current version (v${headPack.version}), or a version the base already held, can be newly listed`,
-        );
-      }
-    }
     const same =
       basePack !== null &&
       canonicalJson(basePack) === canonicalJson(headPack) &&
@@ -249,17 +272,46 @@ function compare(
   return changes;
 }
 
-/**
- * Checks `registry/` in `repo` (the working tree and HEAD's history), and against `base` when
- * given.
- */
+/** The tree of commit `ref` in `repo`, read with `git` (the base of a pull request). */
+export function gitReader(repo: string, ref: string): TreeReader {
+  const git = (args: string[]): Buffer | null => {
+    try {
+      return execFileSync('git', ['-C', repo, ...args], {
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      return null;
+    }
+  };
+  return {
+    read: (path) => git(['show', `${ref}:${path}`]),
+    list: (dir) =>
+      (git(['ls-tree', '--name-only', `${ref}:${dir}`])?.toString('utf8') ?? '')
+        .split('\n')
+        .filter((n) => n !== '')
+        .sort(),
+  };
+}
+
+/** Checks `registry/` in `repo`'s working tree, and against commit `base` when given. */
 export function checkRegistry(repo: string, base: string | null): RegistryCheck {
-  const collected = collectRegistry(repo);
+  const reader = fsReader(repo);
+  const collected = collectRegistry(reader);
   const errors = [...collected.problems];
   const notes: string[] = [];
-  checkFiles(repo, collected, errors);
+  checkFiles(reader, collected, errors);
   const keys = checkKeys(repo, errors, notes);
-  const changes =
-    base === null ? null : compare(repo, base, collected, collectRegistry(repo, base), errors);
+  let changes: PackChange[] | null = null;
+  if (base !== null) {
+    const baseReader = gitReader(repo, base);
+    changes = compare(
+      collected,
+      collectRegistry(baseReader),
+      readState(baseReader)?.index_version ?? null,
+      readState(reader)?.index_version ?? null,
+      errors,
+    );
+  }
   return { collected, errors, notes, ...keys, changes };
 }

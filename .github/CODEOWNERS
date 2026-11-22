@@ -11,3 +11,7 @@ scripts/registry/**                               @arg1998
 packages/core/src/infra/site-packs/trust-root.ts  @arg1998
 .github/workflows/website.yml                     @arg1998
 .github/workflows/registry-resign.yml             @arg1998
+.github/workflows/ci.yml                          @arg1998
+packages/core/src/infra/site-packs/verify.ts      @arg1998
+packages/core/src/infra/site-packs/verify-layout.ts @arg1998
+packages/core/src/infra/site-packs/ed25519.ts     @arg1998

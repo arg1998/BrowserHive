@@ -1,0 +1,209 @@
+{
+  "description": "GitHub permits machine accounts run by a responsible person. Token, SSH-key, security, OAuth-app, session, email and account-admin pages, sign-out and OAuth/device-flow approvals are blocked for agents.",
+  "domains": [
+    "github.com"
+  ],
+  "guards": [
+    {
+      "action": "block",
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "github.com/logout"
+      }
+    },
+    {
+      "action": "block",
+      "id": "oauth-approve",
+      "kind": "credential",
+      "match": {
+        "methods": [
+          "POST"
+        ],
+        "url": "github.com/login/oauth/authorize*"
+      }
+    },
+    {
+      "action": "block",
+      "id": "device-approve",
+      "kind": "credential",
+      "match": {
+        "methods": [
+          "POST"
+        ],
+        "url": "github.com/login/device*"
+      }
+    },
+    {
+      "action": "block",
+      "id": "tokens-classic",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/tokens"
+      }
+    },
+    {
+      "action": "block",
+      "id": "tokens-fine-grained",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/personal-access-tokens"
+      }
+    },
+    {
+      "action": "block",
+      "id": "ssh-gpg-keys",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/keys"
+      }
+    },
+    {
+      "action": "block",
+      "id": "security",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/security"
+      }
+    },
+    {
+      "action": "block",
+      "id": "oauth-apps",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/applications"
+      }
+    },
+    {
+      "action": "block",
+      "id": "oauth-app-secrets",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/developers"
+      }
+    },
+    {
+      "action": "block",
+      "id": "github-app-keys",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/apps"
+      }
+    },
+    {
+      "action": "block",
+      "id": "recovery-codes",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/auth"
+      }
+    },
+    {
+      "action": "block",
+      "id": "two-factor",
+      "kind": "credential",
+      "match": {
+        "url": "github.com/settings/two_factor_authentication"
+      }
+    },
+    {
+      "action": "block",
+      "id": "sessions",
+      "kind": "account",
+      "match": {
+        "url": "github.com/settings/sessions"
+      }
+    },
+    {
+      "action": "block",
+      "id": "emails",
+      "kind": "account",
+      "match": {
+        "url": "github.com/settings/emails"
+      }
+    },
+    {
+      "action": "block",
+      "id": "account-admin",
+      "kind": "destructive",
+      "match": {
+        "url": "github.com/settings/admin"
+      }
+    }
+  ],
+  "id": "github.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "sign_in": {
+    "human_only": false,
+    "post": [
+      "github.com/session",
+      "github.com/sessions/*"
+    ],
+    "url": {
+      "host": "github.com",
+      "path": "/login"
+    }
+  },
+  "signed_in": {
+    "cookie_names": [
+      "user_session",
+      "__Host-user_session_same_site"
+    ],
+    "kind": "redirect",
+    "probe": {
+      "host": "github.com",
+      "path": "/settings/profile"
+    },
+    "signed_out_redirects": [
+      "github.com/login*"
+    ]
+  },
+  "sources": [
+    {
+      "kind": "official",
+      "url": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service"
+    },
+    {
+      "kind": "official",
+      "url": "https://docs.github.com/en/site-policy/privacy-policies/github-cookies"
+    },
+    {
+      "kind": "official",
+      "url": "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens"
+    },
+    {
+      "kind": "official",
+      "url": "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/viewing-and-managing-your-sessions"
+    },
+    {
+      "kind": "official",
+      "url": "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps"
+    },
+    {
+      "kind": "observed",
+      "url": "https://github.com/settings/profile"
+    },
+    {
+      "kind": "observed",
+      "url": "https://github.com/login"
+    }
+  ],
+  "title": "GitHub",
+  "verified": {
+    "guards": "2026-11-16",
+    "sign_in": "2026-11-17",
+    "signed_in": "2026-11-16",
+    "write_policy": "2026-11-16"
+  },
+  "version": 2,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "We do permit machine accounts: A machine account is an Account set up by an individual human who accepts the Terms on behalf of the Account, provides a valid email address, and is responsible for its actions.",
+      "url": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service"
+    },
+    "default": "allow",
+    "stance": "allowed"
+  }
+}

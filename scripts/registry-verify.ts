@@ -1,6 +1,6 @@
 /** @module scripts/registry-verify — verifies a signed registry layout with core's verifier (the one `browserhive sitepacks verify <dir>` and the T4b client use), for CI's pull-request preview (spec 13 §10.2, T4a acceptance): `--test-root <file>` must accept it (the preview's throwaway root from `registry-sign.mjs --test-keys`), and `--expect-pinned-refusal` requires that the root keys pinned in this build refuse it, so a preview's key can never pass for a release's.
  *
- *   bun scripts/registry-verify.ts <dir> [--test-root <test-root.pub>] [--expect-pinned-refusal]
+ *   bun scripts/registry-verify.ts <dir> [--test-root <root.pub>]… [--expect-pinned-refusal]
  */
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -18,10 +18,6 @@ if (dir === undefined || dir.startsWith('--')) {
   console.error('usage: registry-verify.ts <dir> [--test-root <file>] [--expect-pinned-refusal]');
   process.exit(64);
 }
-const at = (name: string) => {
-  const i = args.indexOf(`--${name}`);
-  return i < 0 ? null : (args[i + 1] ?? null);
-};
 
 async function verify(root: SitePacksTrustRoot): Promise<SignedLayoutReport> {
   return verifySignedLayout({
@@ -47,13 +43,18 @@ function describe(report: SignedLayoutReport): string {
 }
 
 let failed = false;
-const testRoot = at('test-root');
-if (testRoot !== null) {
-  const pub = JSON.parse(readFileSync(testRoot, 'utf8'));
-  const parsed = parseTrustRoot({ keys: [{ keyId: pub.key_id, publicKey: pub.public_key }] });
-  if (!parsed.ok) throw new Error(`${testRoot}: ${parsed.error}`);
+// Every `--test-root <file>` given (a preview has one; the dry run's two roots both count).
+const testRoots = args.flatMap((a, i) =>
+  a === '--test-root' && args[i + 1] !== undefined ? [args[i + 1] ?? ''] : [],
+);
+if (testRoots.length > 0) {
+  const pubs = testRoots.map((file) => JSON.parse(readFileSync(file, 'utf8')));
+  const parsed = parseTrustRoot({
+    keys: pubs.map((pub) => ({ keyId: pub.key_id, publicKey: pub.public_key })),
+  });
+  if (!parsed.ok) throw new Error(`${testRoots.join(', ')}: ${parsed.error}`);
   const report = await verify(parsed.value);
-  console.log(`with the test root ${pub.key_id}: ${describe(report)}`);
+  console.log(`with the test root ${pubs.map((p) => p.key_id).join(', ')}: ${describe(report)}`);
   failed ||= !report.ok;
 }
 if (args.includes('--expect-pinned-refusal')) {

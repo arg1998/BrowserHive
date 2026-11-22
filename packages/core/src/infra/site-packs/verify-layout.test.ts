@@ -99,7 +99,7 @@ describe('verifySignedLayout', () => {
     expect(report.packs[0]).toMatchObject({ status: 'other_client', revoked: true });
   });
 
-  it('applies the stored floors; index_floor in keys.json resets the index floor', async () => {
+  it('applies the stored floors; index_floor resets the index floor once, from a newer keys.json only', async () => {
     const layout = buildLayout({ now: NOW, index: { version: 10 } });
     const read = readerOf(layout.files);
     const rolled = await verifySignedLayout({
@@ -110,15 +110,30 @@ describe('verifySignedLayout', () => {
       floors: { keysVersion: null, indexVersion: 20 },
     });
     expect(rolled.refusal?.reason).toBe('rollback');
-    const reset = buildLayout({ now: NOW, index: { version: 10 }, keys: { index_floor: 5 } });
-    const accepted = await verifySignedLayout({
+    // index_floor is honoured once, from a keys.json newer than the stored one (review #97 M2).
+    const reset = buildLayout({
+      now: NOW,
+      index: { version: 10 },
+      keys: { version: 2, index_floor: 5 },
+    });
+    const once = await verifySignedLayout({
       read: readerOf(reset.files),
       root: reset.trustRoot,
       now: NOW,
       binaryVersion: null,
       floors: { keysVersion: 1, indexVersion: 900_000 },
     });
-    expect(accepted.ok).toBe(true);
+    expect(once.ok).toBe(true);
+    expect(once.indexFloorApplied).toBe(5);
+    const repeated = await verifySignedLayout({
+      read: readerOf(reset.files),
+      root: reset.trustRoot,
+      now: NOW,
+      binaryVersion: null,
+      floors: { keysVersion: 2, indexVersion: 50 },
+    });
+    expect(repeated.refusal?.reason).toBe('rollback');
+    expect(repeated.indexFloorApplied ?? null).toBeNull();
     const keysRolled = await verifySignedLayout({
       read,
       root: layout.trustRoot,

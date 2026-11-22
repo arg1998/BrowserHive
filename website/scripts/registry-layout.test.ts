@@ -63,3 +63,22 @@ describe('the registry in the built site', () => {
     }
   });
 });
+
+describe('deploy guard', () => {
+  it('never deploys away a published registry', async () => {
+    const { deployDecision } = await import('./deploy-guard.ts');
+    expect(deployDecision({ hasRegistry: true, live: 'unknown', dropAllowed: false }).ok).toBe(
+      true,
+    );
+    expect(deployDecision({ hasRegistry: false, live: 'none', dropAllowed: false }).ok).toBe(true);
+    expect(deployDecision({ hasRegistry: false, live: 'published', dropAllowed: false }).ok).toBe(
+      false,
+    );
+    expect(deployDecision({ hasRegistry: false, live: 'unknown', dropAllowed: true }).ok).toBe(
+      false,
+    );
+    expect(deployDecision({ hasRegistry: false, live: 'published', dropAllowed: true }).ok).toBe(
+      true,
+    );
+  });
+});

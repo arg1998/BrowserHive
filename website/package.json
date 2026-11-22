@@ -11,7 +11,7 @@
     "lint": "biome ci .",
     "format": "biome check --write .",
     "test": "bun test",
-    "deploy": "wrangler deploy"
+    "deploy": "bun scripts/deploy-guard.ts && wrangler deploy"
   },
   "dependencies": {
     "@astrojs/starlight": "0.42.1",

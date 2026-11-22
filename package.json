@@ -45,7 +45,7 @@
     "test:dashboard": "bun test packages/dashboard/src",
     "registry:check": "bun scripts/registry-build.ts --check",
     "registry:build": "bun scripts/registry-build.ts --out dist/registry/v1",
-    "registry:keys": "bun scripts/registry-keys.ts",
+    "registry:keys": "node scripts/registry-keys.mjs",
     "website:install": "bun install --cwd website --frozen-lockfile",
     "website:dev": "bun run --cwd website dev",
     "website:sync": "bun run --cwd website sync",

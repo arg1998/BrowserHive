@@ -3,11 +3,13 @@
   "versions": {
     "1": {
       "notes": "First version: the sign-in page, the signed-in probe, and the sign-out, account and credential guards that could be checked without signing in (D-69).",
-      "released": "2026-11-17"
+      "released": "2026-11-17",
+      "sha256": "d46e4197502845973d3223cdf47fca797b821d0cd64412e0988970ccd61f3951"
     },
     "2": {
       "notes": "Selects the behaviour strategies keep-alive, device-bound-session and stealth-profile (standard) (D-72).",
-      "released": "2026-11-17"
+      "released": "2026-11-17",
+      "sha256": "509a6300de876b94116e7f3911e84a4e3a5886241378375a2fd7a6f97962ea6a"
     }
   }
 }

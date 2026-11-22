@@ -1,24 +1,19 @@
-/** @module scripts/registry-build — builds the unsigned site-pack registry from `registry/` (spec 13 §10.1, §10.7): content-addressed pack files `packs/<id>/<sha256>.json`, an unsigned `index.json` (`{schema, packs}`; `registry-sign.mjs` adds the version, dates and signature) and the root-signed `keys.json` when it exists. At most ten versions per pack, from `registry/versions/<id>.json` and the git history. Every pack and listed version is checked first (`registry/check.ts`).
+/** @module scripts/registry-build — builds the unsigned site-pack registry from `registry/` (spec 13 §10.1, §10.7): content-addressed pack files `packs/<id>/<sha256>.json`, an unsigned `index.json` (`{schema, packs}`; `registry-sign.mjs` adds the version, dates and signature) and the root-signed `keys.json` when it exists. At most ten versions per pack, from `registry/versions/<id>.json` and `registry/archive/` (never from git history). Every pack and listed version is checked first (`registry/check.ts`).
  *
  *   bun scripts/registry-build.ts --out dist/registry/v1 [--summary <file>]
  *   bun scripts/registry-build.ts --check [--base <commit>] [--summary <file>]   validate; with a
  *       base, also the version rules and each change's classification (the PR job summary)
- *   bun scripts/registry-build.ts --format     rewrite registry/packs and registry/versions canonically
+ *   bun scripts/registry-build.ts --sync       rewrite registry/packs and registry/versions canonically
+ *       and archive each pack's current version (registry/archive/<id>/<sha256>.json)
  *
  * `--repo <dir>` points at another checkout (tests).
  */
-import {
-  appendFileSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { checkRegistry } from './registry/check.ts';
 import { summaryOf } from './registry/summary.ts';
-import { canonicalJson, requireFullHistory } from './registry-common.mjs';
+import { syncRegistry } from './registry/sync.ts';
+import { canonicalJson } from './registry-common.mjs';
 
 function flag(name: string): string | null {
   const i = process.argv.indexOf(`--${name}`);
@@ -34,30 +29,17 @@ function flag(name: string): string | null {
 const has = (name: string): boolean => process.argv.includes(`--${name}`);
 const repo = resolve(flag('repo') ?? join(import.meta.dir, '..'));
 
-if (has('format')) {
-  for (const dir of ['packs', 'versions']) {
-    const full = join(repo, 'registry', dir);
-    for (const name of readdirSync(full).filter((n) => n.endsWith('.json'))) {
-      const path = join(full, name);
-      writeFileSync(path, canonicalJson(JSON.parse(readFileSync(path, 'utf8'))));
-    }
-  }
-  console.log('registry-build: formatted registry/packs and registry/versions');
+if (has('sync')) {
+  for (const line of syncRegistry(repo, new Date().toISOString().slice(0, 10))) console.log(line);
+  console.log('registry-build: registry/packs, registry/versions and registry/archive in sync');
   process.exit(0);
 }
 
 const out = flag('out');
 const base = flag('base');
 if (out === null && !has('check')) {
-  console.error('usage: registry-build.ts --out <dir> | --check [--base <commit>] | --format');
+  console.error('usage: registry-build.ts --out <dir> | --check [--base <commit>] | --sync');
   process.exit(64);
-}
-
-try {
-  requireFullHistory(repo);
-} catch (error) {
-  console.error(`registry-build: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
 }
 
 const check = checkRegistry(repo, base);

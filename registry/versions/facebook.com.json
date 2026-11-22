@@ -3,11 +3,13 @@
   "versions": {
     "1": {
       "notes": "First version: the sign-in page, the signed-in probe, and the sign-out, account and credential guards that could be checked without signing in (D-69).",
-      "released": "2026-11-17"
+      "released": "2026-11-17",
+      "sha256": "529b5bd13a6ec30e5df4921474835e1b3ad0f8f72d737e004ca4d3e2780d6a33"
     },
     "2": {
       "notes": "Selects the behaviour strategies serialize-site, single-focus and human-dwell (D-72).",
-      "released": "2026-11-17"
+      "released": "2026-11-17",
+      "sha256": "2d2d362bbcb927805288c3c9944787bdeabd4068cc94fcaa18cee55864402478"
     }
   }
 }
