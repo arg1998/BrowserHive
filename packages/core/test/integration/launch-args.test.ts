@@ -1,4 +1,4 @@
-/** @module test/integration/launch-args — `launch_session` refuses deny-listed launch args in every switch spelling Chromium accepts, before any browser spawns (real Chromium). */
+/** @module test/integration/launch-args — `launch_session` refuses deny-listed launch args in every switch spelling Chromium accepts, and an `ignoreDefaultArgs` that drops a protected default, before any browser spawns (real Chromium). */
 
 import { describe, expect, it, spyOn } from 'bun:test';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -40,10 +40,32 @@ describe('launch-arg deny-list (real Chromium)', () => {
     expect(await h.callJson<unknown[]>('list_sessions')).toEqual([]);
   });
 
-  it('still launches with harmless single-dash args', async () => {
+  it('refuses an ignoreDefaultArgs that drops a protected default and spawns nothing', async () => {
     const h = state.harness;
     const launches = spyOn(h.driver, 'launch');
-    const id = await h.launch({ slug: 'allowed', launch_options: { args: ['-mute-audio'] } });
+    for (const ignoreDefaultArgs of [true, ['--remote-debugging-pipe'], ['-user-data-dir']]) {
+      const result = await h.call('launch_session', {
+        slug: 'denied',
+        launch_options: { ignoreDefaultArgs },
+      });
+      expect({ ignoreDefaultArgs, isError: result.isError, ...errorOf(result) }).toEqual({
+        ignoreDefaultArgs,
+        isError: true,
+        code: 'UNSAFE_LAUNCH_ARG',
+        details: { arg: 'ignoreDefaultArgs' },
+      });
+    }
+    expect(launches).toHaveBeenCalledTimes(0);
+    expect(await h.callJson<unknown[]>('list_sessions')).toEqual([]);
+  });
+
+  it('still launches with harmless single-dash args and a droppable default', async () => {
+    const h = state.harness;
+    const launches = spyOn(h.driver, 'launch');
+    const id = await h.launch({
+      slug: 'allowed',
+      launch_options: { args: ['-mute-audio'], ignoreDefaultArgs: ['--enable-automation'] },
+    });
     expect(launches).toHaveBeenCalledTimes(1);
     expect(
       (await h.callJson<{ closed: boolean }>('close_session', { session_id: id })).closed,

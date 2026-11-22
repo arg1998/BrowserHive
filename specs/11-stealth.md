@@ -56,7 +56,7 @@ applyIdentity    ── CDP Emulation.setUserAgentOverride per page (awaitable) 
 ### 2.2 Launch flags
 
 - `STEALTH_ARGS = ['--disable-blink-features=AutomationControlled']` (projects `navigator.webdriver === false`), added only for stealth sessions and **not** deny-checked (internal).
-- `ignoreDefaultArgs` gains `'--enable-automation'` (merge rule: user `true` left alone; array appended if missing; absent ⇒ `['--enable-automation']`).
+- `ignoreDefaultArgs` gains `'--enable-automation'` (merge rule: user `true` left alone; array appended if missing; absent ⇒ `['--enable-automation']`). A caller's `ignoreDefaultArgs` is validated first (§4): `true` never reaches the merge from an agent.
 - Merge order: channel args → stealth args → user args (user wins where the deny-list permits). `headless`, `channel`, `args` are stripped from user `launchOptions` and re-applied by BrowserHive; everything else passes through (`restLaunchOptions`).
 - Persistence branches: `persistent` ⇒ `launchPersistentContext(userDataDir, {...common, ...identityContext, ...contextOptions})`; `memory`/`storage-state` ⇒ `launch(common)` then `newContext({...identityContext, ...contextOptions})`. Identity context options are spread **before** caller `contextOptions` so caller `viewport`/`locale`/`timezoneId` win.
 - Isolation primitive: one browser subprocess + one context per session; `SessionLauncher`/`BrowserDriver` implementations must never share a `Browser` or `BrowserContext`.
@@ -150,7 +150,9 @@ Purpose: protect BrowserHive's own guarantees (isolation, managed data-dir, clos
 
 `--user-data-dir`, `--profile-directory`, `--disk-cache-dir`, `--no-sandbox`, `--disable-setuid-sandbox`, `--disable-web-security`, `--disable-site-isolation-trials`, `--disable-features`, `--single-process`, `--no-zygote`, `--remote-debugging-port`, `--remote-debugging-pipe`, `--remote-debugging-address`.
 
-Sibling loose fields that bypass the intent of the deny-list (`chromiumSandbox: false`, `env`, `downloadsPath`, `recordVideo`) are **also refused** by the launch-option policy (`UNSAFE_LAUNCH_ARG` with the field name) — a correctness fix, not a behavior an agent could rely on. `--proxy-server`, `--proxy-bypass-list`, `--proxy-pac-url`, `--host-resolver-rules` stay **allowed** (BYO proxy) until a managed proxy layer exists (§11).
+Sibling loose fields that bypass the intent of the deny-list (`chromiumSandbox: false`, `env`, `downloadsPath`, `recordVideo`, and an `ignoreDefaultArgs` that drops anything but `--enable-automation`) are **also refused** by the launch-option policy (`UNSAFE_LAUNCH_ARG` with the field name) — a correctness fix, not a behavior an agent could rely on. `--proxy-server`, `--proxy-bypass-list`, `--proxy-pac-url`, `--host-resolver-rules` stay **allowed** (BYO proxy) until a managed proxy layer exists (§11).
+
+`ignoreDefaultArgs` is an allowlist (`DROPPABLE_DEFAULT_ARG_KEYS`): absent, `false`, `[]`, or entries that normalise to `--enable-automation`. `true` and every other entry are refused with `UNSAFE_LAUNCH_ARG` naming `ignoreDefaultArgs`, because Playwright's defaults carry the guarantees: `--user-data-dir=<managed dir>` (without it Chromium opens the host's default profile), `--remote-debugging-pipe`, `--headless`, the structured proxy as `--proxy-server`/`--proxy-bypass-list` (the forced loopback bypass), `--password-store=basic` and `--use-mock-keychain` (keep the host keyring and Keychain out), `--disable-extensions`, and `--no-sandbox` when the sandbox is off. Playwright removes defaults by exact string and changes the list between releases, so only an allowlist stays closed.
 
 ### 4.1 Chromium's sandbox (`sandbox`, D-27)
 

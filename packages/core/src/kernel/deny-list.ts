@@ -107,6 +107,40 @@ export function isDeniedLaunchArg(arg: string): boolean {
   return key !== null && DENIED_SET.has(key);
 }
 
+/**
+ * The only Playwright default args a caller may drop through `launch_options.ignoreDefaultArgs`, in
+ * canonical `--name` form. Stealth sessions drop `--enable-automation` themselves; a caller may do
+ * the same without stealth.
+ *
+ * Every other default is protected because Playwright's defaults carry BrowserHive's guarantees:
+ * `--user-data-dir=<managed dir>` (without it Chromium opens the host's default profile),
+ * `--remote-debugging-pipe`, `--headless`, the structured proxy as `--proxy-server` /
+ * `--proxy-bypass-list` (the forced loopback bypass), `--password-store=basic` and
+ * `--use-mock-keychain` (keep the host's keyring and Keychain out), `--disable-extensions`, and
+ * `--no-sandbox` when the sandbox is off. Playwright removes defaults by exact string, and its
+ * default list changes between releases, so an allowlist is the only form that stays closed.
+ * `ignoreDefaultArgs: true` drops all of them and is always refused.
+ */
+export const DROPPABLE_DEFAULT_ARG_KEYS: readonly string[] = ['--enable-automation'];
+
+const DROPPABLE_SET: ReadonlySet<string> = new Set(DROPPABLE_DEFAULT_ARG_KEYS);
+
+/**
+ * True when a caller-supplied `ignoreDefaultArgs` value drops nothing protected: absent, `false`, or
+ * an array whose every entry normalises ({@link launchArgKey}) to a
+ * {@link DROPPABLE_DEFAULT_ARG_KEYS droppable default}. `true`, other shapes, and arrays naming any
+ * other entry are not allowed.
+ */
+export function isAllowedIgnoreDefaultArgs(value: unknown): boolean {
+  if (value === undefined || value === false) return true;
+  if (!Array.isArray(value)) return false;
+  return value.every((entry: unknown) => {
+    if (typeof entry !== 'string') return false;
+    const key = launchArgKey(entry);
+    return key !== null && DROPPABLE_SET.has(key);
+  });
+}
+
 /** Details of an `UNSAFE_LAUNCH_ARG` failure: the original, un-normalised arg. */
 export interface UnsafeLaunchArgDetails {
   readonly arg: string;

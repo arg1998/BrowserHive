@@ -56,6 +56,18 @@ describe('parseLaunchOptions', () => {
         if (isAppError(err, 'UNSAFE_LAUNCH_ARG')) expect(err.details.arg).toBe(field);
       }
     }
+    for (const ignoreDefaultArgs of [true, ['--user-data-dir'], ['-Headless']]) {
+      try {
+        parseLaunchOptions({ ignoreDefaultArgs });
+        throw new Error('expected throw');
+      } catch (err) {
+        expect(isAppError(err, 'UNSAFE_LAUNCH_ARG')).toBe(true);
+        if (isAppError(err, 'UNSAFE_LAUNCH_ARG')) expect(err.details.arg).toBe('ignoreDefaultArgs');
+      }
+    }
+    expect(parseLaunchOptions({ ignoreDefaultArgs: ['--enable-automation'] })).toEqual({
+      ignoreDefaultArgs: ['--enable-automation'],
+    });
     expect(() => parseLaunchOptions({ chromiumSandbox: false })).toThrow();
     expect(parseLaunchOptions({ chromiumSandbox: true })).toEqual({ chromiumSandbox: true });
   });

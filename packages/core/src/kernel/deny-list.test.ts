@@ -5,6 +5,8 @@ import {
   assertLaunchArgsAllowed,
   classifyLaunchArgs,
   DENIED_LAUNCH_ARG_KEYS,
+  DROPPABLE_DEFAULT_ARG_KEYS,
+  isAllowedIgnoreDefaultArgs,
   isDeniedLaunchArg,
   launchArgKey,
 } from './deny-list.ts';
@@ -146,6 +148,61 @@ describe('deny list', () => {
           );
         }
       }
+    }
+  });
+});
+
+describe('ignoreDefaultArgs allowlist', () => {
+  it('only --enable-automation may be dropped', () => {
+    expect(DROPPABLE_DEFAULT_ARG_KEYS).toEqual(['--enable-automation']);
+  });
+
+  it('allows absent, false, an empty array and --enable-automation in any spelling', () => {
+    for (const value of [
+      undefined,
+      false,
+      [],
+      ['--enable-automation'],
+      ['-Enable-Automation', ' /enable-automation '],
+    ]) {
+      expect({ value, allowed: isAllowedIgnoreDefaultArgs(value) }).toEqual({
+        value,
+        allowed: true,
+      });
+    }
+  });
+
+  it('refuses true, other shapes and any protected default in any spelling', () => {
+    const protectedDefaults = [
+      ...DENIED_LAUNCH_ARG_KEYS,
+      '--user-data-dir=/tmp/x',
+      '--remote-debugging-pipe',
+      '--headless',
+      '--disable-blink-features=AutomationControlled',
+      '--proxy-server=http://p:1',
+      '--proxy-bypass-list=<-loopback>',
+      '--password-store=basic',
+      '--use-mock-keychain',
+      '--disable-extensions',
+      '-no-sandbox',
+      '/User-Data-Dir',
+      '--',
+      'about:blank',
+    ];
+    for (const value of [
+      true,
+      'x',
+      1,
+      null,
+      {},
+      [1],
+      ...protectedDefaults.map((entry) => [entry]),
+      ['--enable-automation', '--headless'],
+    ]) {
+      expect({ value, allowed: isAllowedIgnoreDefaultArgs(value) }).toEqual({
+        value,
+        allowed: false,
+      });
     }
   });
 });

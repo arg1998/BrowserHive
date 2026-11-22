@@ -118,6 +118,14 @@ describe('deny-list interplay', () => {
         if (isAppError(err, 'UNSAFE_LAUNCH_ARG')) expect(err.details.arg).toBe(field);
       }
     }
+    for (const ignoreDefaultArgs of [
+      true,
+      ['--remote-debugging-pipe'],
+      ['--password-store=basic'],
+    ]) {
+      expect(() => parseLaunchOptions({ ignoreDefaultArgs })).toThrow();
+    }
+    expect(() => parseLaunchOptions({ ignoreDefaultArgs: ['--enable-automation'] })).not.toThrow();
     expect(() => parseLaunchOptions({ chromiumSandbox: false })).toThrow();
     expect(() => parseLaunchOptions({ chromiumSandbox: true })).not.toThrow();
   });
