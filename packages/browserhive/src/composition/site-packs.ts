@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import type { Repositories, UnitOfWork } from '@browserhive/core/ports/persistence/index';
+import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
 import type { DomainEvents, EventBus } from '@browserhive/core/runtime';
 import {
   type Clock,
@@ -70,6 +71,11 @@ export interface SitePacksInput {
   readonly degradations?: DegradationReporter;
   /** Overrides the bundled folder (tests). */
   readonly bundledDir?: string;
+  /**
+   * The registry root keys (spec 13 §10.2): the testing seam's test root, else (absent) the keys
+   * pinned in this binary. The registry client verifies with it (T4b).
+   */
+  readonly trustRoot?: SitePacksTrustRoot | undefined;
 }
 
 /** Builds and loads the registry. A failed load never stops the server (nothing applies then). */

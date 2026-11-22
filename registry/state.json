@@ -1,0 +1,5 @@
+{
+  "index_version": 0,
+  "note": "The last index version the owner recorded as published. The signing job never signs a version at or below it. Update it from the signing summary now and then (docs/contributing/registry.md).",
+  "schema": 1
+}

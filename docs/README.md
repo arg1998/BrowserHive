@@ -41,4 +41,5 @@ Generated from the source by `scripts/gen-docs.ts`; always in sync with the code
 ## Contributing
 
 - [Architecture](contributing/architecture.md): how the code is organised
+- [The site-pack registry](contributing/registry.md): proposing a pack change, how the registry is signed and published, and the key operations
 - [Contributing guide](../CONTRIBUTING.md)

@@ -18,11 +18,15 @@ jobs:
   # workflow-level `paths` filter would leave them pending forever instead.
   #   code: something outside website/, docs/ and root Markdown changed → everything runs
   #   docs: docs/ or root Markdown changed → the generated-docs and link gates run
+  #   registry: registry/ or its scripts changed → registry-check (spec 13 §10.7)
+  #   workflows: a workflow changed → workflow-lint
   changes:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
       docs: ${{ steps.filter.outputs.docs }}
+      registry: ${{ steps.filter.outputs.registry }}
+      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,7 +38,7 @@ jobs:
         run: |
           if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
             echo "No usable base commit; running everything."
-            { echo "code=true"; echo "docs=true"; } >> "$GITHUB_OUTPUT"
+            { echo "code=true"; echo "docs=true"; echo "registry=true"; echo "workflows=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
           changed="$(git diff --name-only "$BASE...$HEAD")"
@@ -42,8 +46,10 @@ jobs:
           light='^(website/|\.github/workflows/website\.yml$|docs/|[A-Z]+\.md$)'
           if [ -z "$changed" ] || printf '%s\n' "$changed" | grep -qvE "$light"; then code=true; else code=false; fi
           if printf '%s\n' "$changed" | grep -qE '^(docs/|[A-Z]+\.md$)'; then docs=true; else docs=false; fi
-          { echo "code=$code"; echo "docs=$docs"; } >> "$GITHUB_OUTPUT"
-          echo "code=$code docs=$docs"
+          if printf '%s\n' "$changed" | grep -qE '^(registry/|scripts/registry)'; then registry=true; else registry=false; fi
+          if printf '%s\n' "$changed" | grep -qE '^\.github/workflows/'; then workflows=true; else workflows=false; fi
+          { echo "code=$code"; echo "docs=$docs"; echo "registry=$registry"; echo "workflows=$workflows"; } >> "$GITHUB_OUTPUT"
+          echo "code=$code docs=$docs registry=$registry workflows=$workflows"
 
   lint:
     needs: changes
@@ -66,6 +72,49 @@ jobs:
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+
+  # Site-pack registry (spec 13 §10.7): every pack and listed version against the schema and the
+  # refinements, the version rules against the base, and each pack change's classification in the
+  # job summary. No secrets.
+  registry-check:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.registry == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
+      - run: bun install --frozen-lockfile
+      - name: Check and classify the registry changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: bun scripts/registry-build.ts --check --base "$BASE" --summary "$GITHUB_STEP_SUMMARY"
+
+  # actionlint over every workflow, pinned and checksum-verified. Its shellcheck pass is off so the
+  # job gives exactly what a local run gives (`actionlint -shellcheck=`).
+  workflow-lint:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: actionlint
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="actionlint_${VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${archive}"
+          echo "$SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color -shellcheck=
 
   typecheck:
     needs: changes

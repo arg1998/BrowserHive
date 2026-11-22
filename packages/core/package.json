@@ -15,7 +15,8 @@
     "./maintenance": "./src/app/maintenance/index.ts",
     "./runtime": "./src/public/runtime.ts",
     "./server": "./src/public/server.ts",
-    "./test/https-sites": "./test/helpers/https-sites.ts"
+    "./test/https-sites": "./test/helpers/https-sites.ts",
+    "./test/registry-kit": "./test/helpers/registry-kit.ts"
   },
   "scripts": {
     "build": "tsdown",

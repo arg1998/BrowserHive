@@ -1,0 +1,95 @@
+{
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
+  "challenges": [
+    {
+      "action": "attention",
+      "id": "request-blocked",
+      "kind": "rejected",
+      "match": {
+        "title_contains": "Blocked - Indeed.com"
+      }
+    }
+  ],
+  "description": "Indeed's terms prohibit automating the Indeed Apply process. Glassdoor signs in with the Indeed login. Sign-out and account settings are blocked for agents.",
+  "domains": [
+    "indeed.com"
+  ],
+  "guards": [
+    {
+      "action": "block",
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "secure.indeed.com/account/logout"
+      }
+    },
+    {
+      "action": "block",
+      "id": "settings",
+      "kind": "account",
+      "match": {
+        "url": "secure.indeed.com/settings"
+      }
+    }
+  ],
+  "id": "indeed.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "shares_login_with": [
+    "glassdoor.com"
+  ],
+  "sign_in": {
+    "human_only": false,
+    "url": {
+      "host": "secure.indeed.com",
+      "path": "/auth"
+    }
+  },
+  "signed_in": {
+    "kind": "redirect",
+    "probe": {
+      "host": "myjobs.indeed.com",
+      "path": "/"
+    },
+    "signed_out_redirects": [
+      "secure.indeed.com/auth*",
+      "secure.indeed.com/account/login*"
+    ]
+  },
+  "sources": [
+    {
+      "kind": "official",
+      "url": "https://www.indeed.com/legal"
+    },
+    {
+      "kind": "official",
+      "url": "https://www.glassdoor.com/about/terms/"
+    },
+    {
+      "kind": "observed",
+      "url": "https://myjobs.indeed.com/"
+    }
+  ],
+  "title": "Indeed",
+  "verified": {
+    "browser": "2026-11-16",
+    "challenges": "2026-11-16",
+    "guards": "2026-11-16",
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "write_policy": "2026-11-16"
+  },
+  "version": 1,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "Use of any automation, scripting, or bots to automate the Indeed Apply process outside of Indeed’s official vendors and tooling is prohibited.",
+      "url": "https://www.indeed.com/legal"
+    },
+    "default": "confirm",
+    "stance": "writes_restricted"
+  }
+}

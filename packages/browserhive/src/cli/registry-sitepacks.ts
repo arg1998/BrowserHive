@@ -124,8 +124,15 @@ const localSubcommands = [
       flags: remoteJson,
     },
   ),
-  sub(['verify'], 'Check a site pack file offline (schema, refinements, size)', {
-    args: [{ name: 'path', required: true, describe: 'The pack file (<pack id>.json).' }],
+  sub(['verify'], 'Check a site pack file or a signed registry layout offline', {
+    args: [
+      {
+        name: 'path',
+        required: true,
+        describe:
+          'The pack file (<pack id>.json): schema, refinements, size. Or a folder holding a signed layout (keys.json, index.json, their .sig files and packs/): every signature against the root keys built into this release, and every pack file against the index.',
+      },
+    ],
     flags: [jsonFlag],
   }),
 ];

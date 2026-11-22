@@ -1,5 +1,25 @@
-/** @module contracts/site-packs — the site pack schema and its bounds (spec 13 §9.2, §9.10) */
+/** @module contracts/site-packs — the site pack schema and its bounds (spec 13 §9.2, §9.10), and the signed registry layout (§10.1) */
 
+export {
+  REGISTRY_INDEX_MAX_BYTES,
+  REGISTRY_KEYS_MAX_BYTES,
+  REGISTRY_MAX_ONLINE_KEYS,
+  REGISTRY_MAX_PACKS,
+  REGISTRY_MAX_VERSIONS,
+  REGISTRY_NOTES_MAX,
+  REGISTRY_SCHEMA,
+  REGISTRY_SIG_MAX_BYTES,
+  RegistryIndexPack,
+  RegistryIndexV1,
+  RegistryInstant,
+  RegistryKeyId,
+  RegistryKeysV1,
+  RegistryOnlineKey,
+  RegistryPackVersion,
+  RegistryPublicKey,
+  RegistrySignature,
+  RegistrySignatures,
+} from './registry.ts';
 export {
   CSS_PSEUDO_ALLOWLIST,
   PACE_CEILING,

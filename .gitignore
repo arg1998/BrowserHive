@@ -28,3 +28,7 @@ tmp/
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.d.ts.map
 !packages/core/src/infra/persistence/generated/db.d.ts
+# registry key material never belongs in the repository (scripts/registry-keys.ts refuses to write it here)
+root-[12].key
+*.secret
+/registry/**/*.key

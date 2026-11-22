@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "versions": {
+    "1": {
+      "notes": "First version: the sign-in page, the signed-in probe, and the sign-out, account and credential guards that could be checked without signing in (D-69).",
+      "released": "2026-11-17",
+      "sha256": "bef0ef07e1e2e96e9432ea18e869b3dfd8d1024d07d310f9512aa04565b36683"
+    },
+    "2": {
+      "notes": "Selects the behaviour strategies keep-alive (D-72).",
+      "released": "2026-11-17",
+      "sha256": "061e6d27eb272e13f66339eb6dafd806a1c90763121542fba0760d04149339a7"
+    }
+  }
+}

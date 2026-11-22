@@ -1,13 +1,36 @@
 name: website
 
 # browserhive.ai: landing page and docs, built from website/ and docs/ and served by Cloudflare
-# Workers static assets. Independent of the library pipeline in ci.yml.
+# Workers static assets, plus the signed site-pack registry under /registry/v1/ (spec 13 §10.7,
+# §10.8). Independent of the library pipeline in ci.yml.
+#
+# Registry: `registry-build` (no secrets) assembles the unsigned layout from registry/. On main,
+# when registry/ changed or a re-sign was asked for (registry-resign.yml, or a manual run with
+# `sign`), `registry-sign` signs it in the `registry-signing` environment (owner approval, the
+# online key) without installing dependencies, and the deploy publishes it. Otherwise the deploy
+# carries the published registry over, verified, so a docs-only deploy never drops it. Signing is
+# off until the repository variable REGISTRY_PUBLISH is `true` (set after the key ceremony).
+# Pull requests sign with a throwaway test key that no release trusts.
 
 on:
   pull_request:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      sign:
+        description: Re-sign the site-pack registry (needs the owner's approval)
+        type: boolean
+        default: false
+      first_publish:
+        description: The first publication of the registry (nothing is published yet); with sign
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      sign:
+        type: boolean
+        default: false
 
 concurrency:
   group: website-${{ github.ref }}
@@ -16,13 +39,17 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  REGISTRY_URL: https://browserhive.ai/registry/v1/
+
 jobs:
-  # The site depends on website/, docs/, the package version (which picks the docs major) and
-  # this workflow. Skipped jobs report success, so this workflow can be a required check.
+  # The site depends on website/, docs/, registry/, the package version (which picks the docs
+  # major) and this workflow. Skipped jobs report success, so this workflow can be a required check.
   changes:
     runs-on: ubuntu-latest
     outputs:
       site: ${{ steps.filter.outputs.site }}
+      registry: ${{ steps.filter.outputs.registry }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -30,21 +57,24 @@ jobs:
       - id: filter
         env:
           EVENT: ${{ github.event_name }}
+          SIGN: ${{ inputs.sign == true }}
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
           HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
-          if [ "$EVENT" = "workflow_dispatch" ] || [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
-            echo "site=true" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$EVENT" = "schedule" ] || [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            { echo "site=true"; echo "registry=$SIGN"; } >> "$GITHUB_OUTPUT"
+            echo "site=true registry=$SIGN"
             exit 0
           fi
           changed="$(git diff --name-only "$BASE...$HEAD")"
-          if printf '%s\n' "$changed" | grep -qE '^(website/|docs/|packages/browserhive/package\.json$|\.github/workflows/website\.yml$)'; then
+          if printf '%s\n' "$changed" | grep -qE '^(website/|docs/|registry/|scripts/registry|packages/browserhive/package\.json$|\.github/workflows/website\.yml$)'; then
             site=true
           else
             site=false
           fi
-          echo "site=$site" >> "$GITHUB_OUTPUT"
-          echo "site=$site"
+          if [ "$SIGN" = "true" ] || printf '%s\n' "$changed" | grep -qE '^registry/'; then registry=true; else registry=false; fi
+          { echo "site=$site"; echo "registry=$registry"; } >> "$GITHUB_OUTPUT"
+          echo "site=$site registry=$registry"
 
   build:
     needs: changes
@@ -75,9 +105,126 @@ jobs:
           include-hidden-files: true
           retention-days: 7
 
-  # Preview on a workers.dev URL for PRs from this repository (forks get no secrets).
+  # The unsigned registry: content-addressed pack files and index.json from registry/ (its archive
+  # of published versions; no git history). Dependencies installed, no secrets.
+  registry-build:
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
+      - run: bun install --frozen-lockfile
+      - run: bun scripts/registry-build.ts --out "$RUNNER_TEMP/registry-unsigned"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: registry-unsigned
+          path: ${{ runner.temp }}/registry-unsigned
+          retention-days: 7
+
+  # Pull requests: the same no-dependency signing path, with a throwaway test root and online key
+  # made in the job (registry-sign.mjs --test-keys). No secret, nothing a release trusts.
+  registry-preview-sign:
+    needs: registry-build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: registry-unsigned
+          path: ${{ runner.temp }}/registry-unsigned
+      - run: node --version
+      - run: node scripts/registry-sign.mjs sign --artefact "$RUNNER_TEMP/registry-unsigned" --out "$RUNNER_TEMP/preview/v1" --test-keys "$RUNNER_TEMP/preview"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: registry-preview
+          path: ${{ runner.temp }}/preview
+          retention-days: 7
+
+  # The preview's layout verifies with its test root and is refused by the root keys pinned in
+  # this build: by core's verifier and by `browserhive sitepacks verify`.
+  registry-preview-verify:
+    needs: registry-preview-sign
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: 'bun-${{ runner.os }}-${{ hashFiles(''bun.lock'') }}'
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: registry-preview
+          path: ${{ runner.temp }}/preview
+      - run: bun scripts/registry-verify.ts "$RUNNER_TEMP/preview/v1" --test-root "$RUNNER_TEMP/preview/test-root.pub" --expect-pinned-refusal
+      - name: sitepacks verify refuses the test key
+        run: |
+          if bun packages/browserhive/src/bin.ts sitepacks verify "$RUNNER_TEMP/preview/v1"; then
+            echo "::error::sitepacks verify accepted a layout signed with a test key"
+            exit 1
+          fi
+
+  # main only, after the owner approves the `registry-signing` environment. Checks out the commit
+  # and runs node with no dependency installed: registry-sign.mjs recomputes every pack file and
+  # the index from the commit, refuses any difference from the artefact, verifies the published
+  # layout (pinned roots, the commit's online keys, registry/state.json, unchanged versions), then
+  # signs. With nothing published it refuses unless the run asked for first_publish.
+  registry-sign:
+    needs: [changes, registry-build]
+    if: >-
+      github.ref == 'refs/heads/main' && github.event_name != 'pull_request' &&
+      needs.changes.outputs.registry == 'true' && vars.REGISTRY_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    environment: registry-signing
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: registry-unsigned
+          path: ${{ runner.temp }}/registry-unsigned
+      - run: node --version
+      - name: The published layout (for the next version number)
+        run: node scripts/registry-sign.mjs fetch --url "$REGISTRY_URL" --out "$RUNNER_TEMP/published"
+      - name: Verify against the commit, then sign
+        env:
+          REGISTRY_ONLINE_KEY: ${{ secrets.REGISTRY_ONLINE_KEY }}
+          FIRST: ${{ inputs.first_publish == true && '--first-publish' || '' }}
+        run: >-
+          node scripts/registry-sign.mjs sign --artefact "$RUNNER_TEMP/registry-unsigned"
+          --out "$RUNNER_TEMP/registry-signed" --previous "$RUNNER_TEMP/published"
+          --checksums "$RUNNER_TEMP/registry-checksums.txt" ${FIRST:+"$FIRST"}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: ${{ runner.temp }}/registry-checksums.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: registry-signed
+          path: ${{ runner.temp }}/registry-signed
+          retention-days: 30
+
+  # Preview on a workers.dev URL for PRs from this repository (forks get no secrets), with the
+  # test-key registry under /registry/v1/.
   preview:
-    needs: build
+    needs: [build, registry-preview-verify]
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     env:
@@ -104,6 +251,13 @@ jobs:
           name: website-dist
           path: website/dist
       - if: env.CLOUDFLARE_API_TOKEN != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: registry-preview
+          path: ${{ runner.temp }}/preview
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: bun scripts/copy-registry.ts "$RUNNER_TEMP/preview/v1"
+      - if: env.CLOUDFLARE_API_TOKEN != ''
         name: Upload preview version
         env:
           ALIAS: pr-${{ github.event.pull_request.number }}
@@ -119,11 +273,15 @@ jobs:
           url="$(grep -oE 'https://'"$ALIAS"'-[^ ]+\.workers\.dev' upload.log | head -1 || true)"
           if [ -n "$url" ]; then
             echo "### Website preview: $url" >> "$GITHUB_STEP_SUMMARY"
+            echo "Site-pack registry (test key): $url/registry/v1/index.json" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   deploy:
-    needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [build, registry-build, registry-sign]
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' &&
+      needs.build.result == 'success' && needs.registry-build.result == 'success' &&
+      (needs.registry-sign.result == 'success' || needs.registry-sign.result == 'skipped')
     runs-on: ubuntu-latest
     environment:
       name: website
@@ -131,6 +289,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      SIGNED: ${{ needs.registry-sign.result == 'success' }}
     defaults:
       run:
         working-directory: website
@@ -151,5 +310,31 @@ jobs:
         with:
           name: website-dist
           path: website/dist
+      - if: env.CLOUDFLARE_API_TOKEN != '' && env.SIGNED == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: registry-signed
+          path: ${{ runner.temp }}/registry
+      # Not re-signed in this run: the published registry goes out again unchanged, only when it is
+      # exactly this commit's (its keys.json, a still-valid online key of it, a sane version). If it
+      # is not, the docs still deploy, without the registry, and the job fails at the end.
+      - if: env.CLOUDFLARE_API_TOKEN != '' && env.SIGNED != 'true'
+        id: carry
+        continue-on-error: true
+        working-directory: .
+        run: |
+          node scripts/registry-sign.mjs fetch --url "$REGISTRY_URL" --out "$RUNNER_TEMP/published" --packs
+          node scripts/registry-sign.mjs carry --from "$RUNNER_TEMP/published" --out "$RUNNER_TEMP/registry"
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        run: bun scripts/copy-registry.ts "$RUNNER_TEMP/registry"
+      - if: env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          BH_DEPLOY_DROP_REGISTRY: ${{ steps.carry.outcome == 'failure' && '1' || '' }}
+        run: bun scripts/deploy-guard.ts
       - if: env.CLOUDFLARE_API_TOKEN != ''
         run: bunx wrangler deploy --message "${{ github.sha }}"
+      - if: steps.carry.outcome == 'failure'
+        working-directory: .
+        run: |
+          echo "::error::The published site-pack registry could not be carried over (see the carry step); the site was deployed without it. Re-sign: run the website workflow with sign."
+          exit 1

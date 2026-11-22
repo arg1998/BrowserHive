@@ -3,6 +3,7 @@
 import type { Readable, Writable } from 'node:stream';
 import type { StartupNotificationChannel } from '@browserhive/contracts/notifications';
 import type { ResolvedConfigBundle } from '@browserhive/core/config';
+import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
 import type { HostEnvironment, LogSink } from '@browserhive/core/runtime';
 import type { SandboxHost } from './sandbox.ts';
 
@@ -40,6 +41,8 @@ export interface BootInput {
    * to every template host and exclusive session this server launches. Never from the CLI.
    */
   readonly testingArgs?: readonly string[];
+  /** The registry trust root of the testing seam (spec 13 §10.2); absent: the pinned root. */
+  readonly sitePacksTrustRoot?: SitePacksTrustRoot;
 }
 
 /** A running server. */

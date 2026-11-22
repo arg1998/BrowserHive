@@ -93,6 +93,11 @@ export {
 } from '../app/templates/unavailable-runtime.ts';
 export { VaultService } from '../app/vault/vault-service.ts';
 export { OperatorRequestBroker } from '../domain/operator-requests/broker.ts';
+export {
+  classifyPackChange,
+  NO_TEMPLATES,
+  type PackChangeClassification,
+} from '../domain/site-packs/classify.ts';
 export { issuesText, loadPackBytes, sha256Hex } from '../domain/site-packs/load.ts';
 export {
   type TemplateKey,
@@ -176,11 +181,27 @@ export { sweepStaleTemplateBrowsers } from '../infra/host/stale-template-browser
 export { profileHasSecrets } from '../infra/persistence/profile-secrets.ts';
 export { BundledIndex, BundledPackSource } from '../infra/site-packs/bundled-source.ts';
 export { documentGuardResolver } from '../infra/site-packs/document-guard.ts';
+export { keyIdOf, parseTrustRoot, verifyEd25519 } from '../infra/site-packs/ed25519.ts';
 export { SiteGuardHitsWriter } from '../infra/site-packs/guard-hits-writer.ts';
 export { GuardRuleCatalog, PackGuardRuleSource } from '../infra/site-packs/guard-rules.ts';
 export { LocalPackSource } from '../infra/site-packs/local-source.ts';
 export { createLocalPackWriter, createSitePackCache } from '../infra/site-packs/pack-cache.ts';
 export { NO_SITE_PACKS, templateRequestGuard } from '../infra/site-packs/template-guard.ts';
+export { PINNED_TRUST_ROOT, trustsNothing } from '../infra/site-packs/trust-root.ts';
+export {
+  type RegistryRefusal,
+  type RegistryRefusalReason,
+  verifyIndex,
+  verifyKeys,
+  verifyListedPack,
+} from '../infra/site-packs/verify.ts';
+export {
+  type LayoutPackResult,
+  type LayoutReader,
+  type RegistryFloors,
+  type SignedLayoutReport,
+  verifySignedLayout,
+} from '../infra/site-packs/verify-layout.ts';
 export { createArtifactFiles } from '../infra/static/artifact-files.ts';
 export { createBunStaticAssets } from '../infra/static/bun-static-assets.ts';
 export { createTraceViewerAssets } from '../infra/static/playwright-trace-viewer.ts';

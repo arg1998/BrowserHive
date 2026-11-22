@@ -1,0 +1,32 @@
+name: registry-resign
+
+# The weekly re-sign of the site-pack registry (spec 13 §10.2, §10.7; the TUF timestamp role):
+# the same content under a new index version and expiry, so installs never see an expired index
+# (it lives 14 days). Each run runs the website workflow with `sign`, whose registry-sign job waits
+# in the `registry-signing` environment for the owner's approval. A missed week only makes installs
+# report SITE_PACKS_STALE after 14 days; nothing stops working. Inert until the repository variable
+# REGISTRY_PUBLISH is `true` (after the key ceremony), and on any branch but main.
+
+on:
+  schedule:
+    - cron: '23 7 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: registry-resign
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  resign:
+    if: github.ref == 'refs/heads/main' && vars.REGISTRY_PUBLISH == 'true'
+    uses: ./.github/workflows/website.yml
+    with:
+      sign: true
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write

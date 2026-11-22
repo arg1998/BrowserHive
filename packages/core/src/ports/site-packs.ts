@@ -86,3 +86,18 @@ export interface SitePackLookup {
   /** A counter that changes on every snapshot swap (compiled-rule caches key on it). */
   readonly generation: number;
 }
+
+/** One registry root key (spec 13 §10.2): the key id and the raw 32-byte Ed25519 public key (base64). */
+export interface TrustRootKey {
+  readonly keyId: string;
+  readonly publicKey: string;
+}
+
+/**
+ * The keys a client trusts to sign `keys.json` (threshold 1). A release pins its own
+ * (`infra/site-packs/trust-root.ts`); BrowserHive's suites inject a test root only through
+ * `createServer({ testing: { sitePacksTrustRoot } })` (spec 13 §10.2). An empty list trusts nothing.
+ */
+export interface SitePacksTrustRoot {
+  readonly keys: readonly TrustRootKey[];
+}

@@ -1,126 +1,137 @@
 {
-  "schema": 1,
-  "id": "linkedin.com",
-  "version": 2,
-  "min_client": "0.2.3",
-  "title": "LinkedIn",
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
   "description": "LinkedIn's terms bar bots and automated methods. Sign-out, session, settings and OAuth-approval requests are blocked for agents.",
   "domains": [
     "linkedin.com",
     "licdn.com"
   ],
-  "sign_in": {
-    "url": {
-      "host": "www.linkedin.com",
-      "path": "/login"
-    },
-    "human_only": false
-  },
-  "signed_in": {
-    "probe": {
-      "host": "www.linkedin.com",
-      "path": "/feed/"
-    },
-    "kind": "redirect",
-    "signed_out_redirects": [
-      "www.linkedin.com/uas/login*",
-      "www.linkedin.com/login*"
-    ],
-    "cookie_names": [
-      "li_at",
-      "liap"
-    ]
-  },
   "guards": [
     {
+      "action": "block",
       "id": "logout-uas",
       "kind": "logout",
       "match": {
         "url": "www.linkedin.com/uas/logout"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "logout-uas-apex",
       "kind": "logout",
       "match": {
         "url": "linkedin.com/uas/logout"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "logout-m",
       "kind": "logout",
       "match": {
         "url": "www.linkedin.com/m/logout"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "logout-m-apex",
       "kind": "logout",
       "match": {
         "url": "linkedin.com/m/logout"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "oauth-approve",
       "kind": "credential",
       "match": {
-        "url": "www.linkedin.com/oauth/v2/authorization*",
         "methods": [
           "POST"
-        ]
-      },
-      "action": "block"
+        ],
+        "url": "www.linkedin.com/oauth/v2/authorization*"
+      }
     },
     {
+      "action": "block",
       "id": "sessions",
       "kind": "account",
       "match": {
         "url": "www.linkedin.com/psettings"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "sessions-apex",
       "kind": "account",
       "match": {
         "url": "linkedin.com/psettings"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "settings",
       "kind": "account",
       "match": {
         "url": "www.linkedin.com/settings"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "preferences",
       "kind": "account",
       "match": {
         "url": "www.linkedin.com/mypreferences"
-      },
-      "action": "block"
+      }
     }
   ],
-  "write_policy": {
-    "default": "confirm",
-    "stance": "prohibited",
-    "clause": {
-      "quote": "Use bots or other unauthorized automated methods to access the Services, add or download contacts, send or redirect messages, create, comment on, like, share, or re-share posts, or otherwise drive inauthentic engagement;",
-      "url": "https://www.linkedin.com/legal/user-agreement",
-      "checked": "2026-11-16"
+  "id": "linkedin.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "sign_in": {
+    "human_only": false,
+    "url": {
+      "host": "www.linkedin.com",
+      "path": "/login"
     }
   },
-  "browser": {
-    "channel": "any",
-    "headed": "preferred"
+  "signed_in": {
+    "cookie_names": [
+      "li_at",
+      "liap"
+    ],
+    "kind": "redirect",
+    "probe": {
+      "host": "www.linkedin.com",
+      "path": "/feed/"
+    },
+    "signed_out_redirects": [
+      "www.linkedin.com/uas/login*",
+      "www.linkedin.com/login*"
+    ]
   },
+  "sources": [
+    {
+      "kind": "official",
+      "url": "https://www.linkedin.com/legal/user-agreement"
+    },
+    {
+      "kind": "official",
+      "url": "https://www.linkedin.com/legal/l/cookie-table"
+    },
+    {
+      "kind": "official",
+      "url": "https://www.linkedin.com/help/linkedin/answer/a1342354"
+    },
+    {
+      "kind": "official",
+      "url": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow"
+    },
+    {
+      "kind": "observed",
+      "url": "https://www.linkedin.com/feed/"
+    }
+  ],
   "strategies": [
     {
       "id": "serialize-site",
@@ -145,33 +156,22 @@
       "params": {}
     }
   ],
+  "title": "LinkedIn",
   "verified": {
+    "browser": "2026-11-16",
+    "guards": "2026-11-16",
     "sign_in": "2026-11-16",
     "signed_in": "2026-11-16",
-    "guards": "2026-11-16",
-    "write_policy": "2026-11-16",
-    "browser": "2026-11-16"
+    "write_policy": "2026-11-16"
   },
-  "sources": [
-    {
-      "url": "https://www.linkedin.com/legal/user-agreement",
-      "kind": "official"
+  "version": 2,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "Use bots or other unauthorized automated methods to access the Services, add or download contacts, send or redirect messages, create, comment on, like, share, or re-share posts, or otherwise drive inauthentic engagement;",
+      "url": "https://www.linkedin.com/legal/user-agreement"
     },
-    {
-      "url": "https://www.linkedin.com/legal/l/cookie-table",
-      "kind": "official"
-    },
-    {
-      "url": "https://www.linkedin.com/help/linkedin/answer/a1342354",
-      "kind": "official"
-    },
-    {
-      "url": "https://learn.microsoft.com/en-us/linkedin/shared/authentication/authorization-code-flow",
-      "kind": "official"
-    },
-    {
-      "url": "https://www.linkedin.com/feed/",
-      "kind": "observed"
-    }
-  ]
+    "default": "confirm",
+    "stance": "prohibited"
+  }
 }

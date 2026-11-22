@@ -5,13 +5,13 @@
   "scripts": {
     "dev": "bun scripts/dev.ts",
     "sync": "bun scripts/sync-docs.ts",
-    "build": "bun scripts/sync-docs.ts && astro build",
+    "build": "bun scripts/sync-docs.ts && astro build && bun scripts/copy-registry.ts",
     "preview": "bun run build && wrangler dev",
     "check": "bun scripts/sync-docs.ts && astro check && biome ci . && bun test",
     "lint": "biome ci .",
     "format": "biome check --write .",
     "test": "bun test",
-    "deploy": "wrangler deploy"
+    "deploy": "bun scripts/deploy-guard.ts && wrangler deploy"
   },
   "dependencies": {
     "@astrojs/starlight": "0.42.1",

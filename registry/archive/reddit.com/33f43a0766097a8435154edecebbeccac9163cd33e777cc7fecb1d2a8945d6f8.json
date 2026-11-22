@@ -1,0 +1,157 @@
+{
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
+  "challenges": [
+    {
+      "action": "attention",
+      "id": "network-block-probe",
+      "kind": "rejected",
+      "match": {
+        "text": "You've been blocked by network security",
+        "url": "www.reddit.com/settings/account*"
+      }
+    },
+    {
+      "action": "attention",
+      "id": "network-block-login",
+      "kind": "rejected",
+      "match": {
+        "text": "You've been blocked by network security",
+        "url": "www.reddit.com/login*"
+      }
+    }
+  ],
+  "description": "Reddit's user agreement bars accessing or collecting data by automated means. The account settings page is the probe; form posts to it need confirmation. Deactivation and session pages are blocked for agents.",
+  "domains": [
+    "reddit.com",
+    "redd.it"
+  ],
+  "guards": [
+    {
+      "action": "block",
+      "id": "app-credentials",
+      "kind": "credential",
+      "match": {
+        "url": "www.reddit.com/prefs/apps"
+      }
+    },
+    {
+      "action": "block",
+      "id": "app-credentials-old",
+      "kind": "credential",
+      "match": {
+        "url": "old.reddit.com/prefs/apps"
+      }
+    },
+    {
+      "action": "block",
+      "id": "oauth-approve",
+      "kind": "credential",
+      "match": {
+        "methods": [
+          "POST"
+        ],
+        "url": "www.reddit.com/api/v1/authorize*"
+      }
+    },
+    {
+      "action": "confirm",
+      "id": "account-settings-writes",
+      "kind": "account",
+      "match": {
+        "methods": [
+          "POST",
+          "PUT",
+          "PATCH",
+          "DELETE"
+        ],
+        "url": "www.reddit.com/settings/account"
+      }
+    },
+    {
+      "action": "block",
+      "id": "account-activity",
+      "kind": "account",
+      "match": {
+        "url": "www.reddit.com/account-activity"
+      }
+    },
+    {
+      "action": "block",
+      "id": "deactivate",
+      "kind": "destructive",
+      "match": {
+        "url": "old.reddit.com/prefs/deactivate"
+      }
+    }
+  ],
+  "id": "reddit.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "sign_in": {
+    "human_only": false,
+    "url": {
+      "host": "www.reddit.com",
+      "path": "/login/"
+    }
+  },
+  "signed_in": {
+    "kind": "either",
+    "probe": {
+      "host": "www.reddit.com",
+      "path": "/settings/account"
+    },
+    "signed_out_redirects": [
+      "www.reddit.com/login*"
+    ]
+  },
+  "sources": [
+    {
+      "kind": "official",
+      "url": "https://redditinc.com/policies/user-agreement"
+    },
+    {
+      "kind": "official",
+      "url": "https://github.com/reddit-archive/reddit/wiki/OAuth2"
+    },
+    {
+      "kind": "official",
+      "url": "https://support.reddithelp.com/hc/en-us/articles/204579509-How-do-I-delete-my-account"
+    },
+    {
+      "kind": "official",
+      "url": "https://support.reddithelp.com/hc/en-us/articles/360045768792-I-need-help-with-a-hacked-or-compromised-account"
+    },
+    {
+      "kind": "observed",
+      "url": "https://www.reddit.com/settings/account"
+    }
+  ],
+  "strategies": [
+    {
+      "id": "human-dwell",
+      "params": {}
+    }
+  ],
+  "title": "Reddit",
+  "verified": {
+    "browser": "2026-11-16",
+    "challenges": "2026-11-16",
+    "guards": "2026-11-16",
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "write_policy": "2026-11-16"
+  },
+  "version": 2,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "Access, search, or collect data from the Services by any means (automated or otherwise) except as permitted in these Terms or in a separate agreement with Reddit",
+      "url": "https://redditinc.com/policies/user-agreement"
+    },
+    "default": "confirm",
+    "stance": "prohibited"
+  }
+}

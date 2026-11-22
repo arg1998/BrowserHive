@@ -18,7 +18,7 @@
       "!**/test/goldens/**/*.json",
       "!**/test/fixtures/**/*.json",
       "!packages/core/test/persistence/fixtures/*.json",
-      "!registry/packs/*.json"
+      "!registry/**/*.json"
     ]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 100, "lineEnding": "lf" },

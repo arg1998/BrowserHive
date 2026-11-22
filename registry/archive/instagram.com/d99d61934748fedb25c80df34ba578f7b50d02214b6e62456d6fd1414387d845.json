@@ -1,0 +1,109 @@
+{
+  "description": "Instagram's terms bar accessing or collecting information in an automated way. Sign-out, Accounts Center, account deletion and OAuth approvals are blocked for agents.",
+  "domains": [
+    "instagram.com",
+    "cdninstagram.com"
+  ],
+  "guards": [
+    {
+      "action": "block",
+      "id": "logout",
+      "kind": "logout",
+      "match": {
+        "url": "www.instagram.com/accounts/logout"
+      }
+    },
+    {
+      "action": "block",
+      "id": "oauth-approve",
+      "kind": "credential",
+      "match": {
+        "methods": [
+          "POST"
+        ],
+        "url": "www.instagram.com/oauth/authorize*"
+      }
+    },
+    {
+      "action": "block",
+      "id": "accounts-center",
+      "kind": "account",
+      "match": {
+        "url": "accountscenter.instagram.com"
+      }
+    },
+    {
+      "action": "block",
+      "id": "delete-account",
+      "kind": "destructive",
+      "match": {
+        "url": "www.instagram.com/accounts/remove"
+      }
+    }
+  ],
+  "id": "instagram.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "sign_in": {
+    "human_only": false,
+    "url": {
+      "host": "www.instagram.com",
+      "path": "/accounts/login/"
+    }
+  },
+  "signed_in": {
+    "kind": "redirect",
+    "probe": {
+      "host": "www.instagram.com",
+      "path": "/accounts/edit/"
+    },
+    "signed_out_redirects": [
+      "www.instagram.com/accounts/login*"
+    ]
+  },
+  "sources": [
+    {
+      "kind": "official",
+      "url": "https://help.instagram.com/581066165581870"
+    },
+    {
+      "kind": "official",
+      "url": "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login"
+    },
+    {
+      "kind": "observed",
+      "url": "https://www.instagram.com/accounts/edit/"
+    }
+  ],
+  "strategies": [
+    {
+      "id": "serialize-site",
+      "params": {}
+    },
+    {
+      "id": "single-focus",
+      "params": {}
+    },
+    {
+      "id": "human-dwell",
+      "params": {}
+    }
+  ],
+  "title": "Instagram",
+  "verified": {
+    "guards": "2026-11-16",
+    "sign_in": "2026-11-16",
+    "signed_in": "2026-11-16",
+    "write_policy": "2026-11-16"
+  },
+  "version": 2,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "This includes creating accounts or accessing or collecting information in an automated way without our express permission, regardless of whether such automated access or collection is undertaken while logged-in to an Instagram account.",
+      "url": "https://help.instagram.com/581066165581870"
+    },
+    "default": "confirm",
+    "stance": "prohibited"
+  }
+}

@@ -1,140 +1,140 @@
 {
-  "schema": 1,
-  "id": "microsoft.com",
-  "version": 2,
-  "min_client": "0.2.3",
-  "title": "Microsoft account",
+  "browser": {
+    "channel": "any",
+    "headed": "preferred"
+  },
   "description": "Microsoft account sign-in. The account security pages force a fresh sign-in, so the probe is the account home and security, proofs, connected-app, security-info and account-closure pages are blocked for agents.",
   "domains": [
     "microsoft.com",
     "live.com",
     "microsoftonline.com"
   ],
-  "sign_in": {
-    "url": {
-      "host": "login.live.com",
-      "path": "/"
-    },
-    "human_only": false
-  },
-  "signed_in": {
-    "probe": {
-      "host": "account.microsoft.com",
-      "path": "/"
-    },
-    "kind": "redirect",
-    "signed_out_redirects": [
-      "account.microsoft.com/account?silentSignInAttempt=1*"
-    ]
-  },
   "guards": [
     {
+      "action": "block",
       "id": "logout-msa",
       "kind": "logout",
       "match": {
         "url": "login.live.com/logout.srf"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "logout-entra",
       "kind": "logout",
       "match": {
         "url": "login.microsoftonline.com/*/oauth2/v2.0/logout"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "admin-consent",
       "kind": "credential",
       "match": {
         "url": "login.microsoftonline.com/*/adminconsent"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "msa-consent",
       "kind": "credential",
       "match": {
         "url": "account.live.com/consent"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "msa-proofs",
       "kind": "credential",
       "match": {
         "url": "account.live.com/proofs"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "entra-security-info",
       "kind": "credential",
       "match": {
         "url": "mysignins.microsoft.com/security-info"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "security",
       "kind": "account",
       "match": {
         "url": "account.microsoft.com/security"
-      },
-      "action": "block"
+      }
     },
     {
+      "action": "block",
       "id": "close-account",
       "kind": "destructive",
       "match": {
         "url": "account.live.com/closeaccount.aspx"
-      },
-      "action": "block"
+      }
     }
   ],
-  "write_policy": {
-    "default": "warn",
-    "stance": "restricted",
-    "clause": {
-      "quote": "Don’t engage in activity that is fraudulent, false or misleading (e.g., asking for money under false pretenses, impersonating someone else, creating fake accounts, automating inauthentic activity",
-      "url": "https://www.microsoft.com/en-us/servicesagreement",
-      "checked": "2026-11-16"
+  "id": "microsoft.com",
+  "min_client": "0.2.3",
+  "schema": 1,
+  "sign_in": {
+    "human_only": false,
+    "url": {
+      "host": "login.live.com",
+      "path": "/"
     }
   },
-  "browser": {
-    "channel": "any",
-    "headed": "preferred"
+  "signed_in": {
+    "kind": "redirect",
+    "probe": {
+      "host": "account.microsoft.com",
+      "path": "/"
+    },
+    "signed_out_redirects": [
+      "account.microsoft.com/account?silentSignInAttempt=1*"
+    ]
   },
+  "sources": [
+    {
+      "kind": "official",
+      "url": "https://www.microsoft.com/en-us/servicesagreement"
+    },
+    {
+      "kind": "official",
+      "url": "https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc"
+    },
+    {
+      "kind": "official",
+      "url": "https://learn.microsoft.com/en-us/entra/identity-platform/v2-admin-consent"
+    },
+    {
+      "kind": "observed",
+      "url": "https://account.microsoft.com/"
+    }
+  ],
   "strategies": [
     {
       "id": "keep-alive",
       "params": {}
     }
   ],
+  "title": "Microsoft account",
   "verified": {
+    "browser": "2026-11-16",
+    "guards": "2026-11-16",
     "sign_in": "2026-11-16",
     "signed_in": "2026-11-16",
-    "guards": "2026-11-16",
-    "write_policy": "2026-11-16",
-    "browser": "2026-11-16"
+    "write_policy": "2026-11-16"
   },
-  "sources": [
-    {
-      "url": "https://www.microsoft.com/en-us/servicesagreement",
-      "kind": "official"
+  "version": 2,
+  "write_policy": {
+    "clause": {
+      "checked": "2026-11-16",
+      "quote": "Don’t engage in activity that is fraudulent, false or misleading (e.g., asking for money under false pretenses, impersonating someone else, creating fake accounts, automating inauthentic activity",
+      "url": "https://www.microsoft.com/en-us/servicesagreement"
     },
-    {
-      "url": "https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols-oidc",
-      "kind": "official"
-    },
-    {
-      "url": "https://learn.microsoft.com/en-us/entra/identity-platform/v2-admin-consent",
-      "kind": "official"
-    },
-    {
-      "url": "https://account.microsoft.com/",
-      "kind": "observed"
-    }
-  ]
+    "default": "warn",
+    "stance": "restricted"
+  }
 }

@@ -4,8 +4,10 @@
     "types": ["bun-types"],
     "rootDir": ".",
     "outDir": "../dist/scripts-types",
-    "tsBuildInfoFile": "../dist/.scripts.tsbuildinfo"
+    "tsBuildInfoFile": "../dist/.scripts.tsbuildinfo",
+    "allowJs": true,
+    "checkJs": true
   },
-  "include": ["**/*.ts"],
+  "include": ["**/*.ts", "registry-common.mjs", "registry-sign.mjs", "registry-keys.mjs"],
   "references": [{ "path": "../packages/contracts" }, { "path": "../packages/core" }]
 }

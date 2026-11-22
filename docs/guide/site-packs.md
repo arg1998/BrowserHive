@@ -281,6 +281,8 @@ browserhive sitepacks verify ./example.com.json
 
 `verify` works offline, without a server: it checks the file against the schema and every rule above and prints each problem with its field. A server refuses an invalid file the same way ([`SITE_PACK_INVALID`](../reference/errors.md#SITE_PACK_INVALID)).
 
+Given a folder instead, `verify` checks a signed registry layout (`keys.json`, `index.json`, their `.sig` files and `packs/`, as published at `https://browserhive.ai/registry/v1/`) against the keys built into your release: the signatures, the expiry dates, and each pack file against the hash the index lists. How the registry is signed is described in [the registry's contributor guide](../contributing/registry.md).
+
 ## Writing a local pack
 
 Write a pack for a site you use, or a stricter version of a bundled pack (a local file with the same id overrides it once approved). This example is for a fictional forum at `example.com`:

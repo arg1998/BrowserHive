@@ -1,10 +1,11 @@
-/** @module cli/commands/sitepacks-verify — `browserhive sitepacks verify <path>`: checks a site pack file offline (size, JSON, known strategies, the `SitePackV1` schema and the refinements of spec 13 §9.10) and prints its issues and warnings; exit 0 when valid, 1 otherwise (spec 13 §11.5). The binary's `min_client` range is not checked: a pack may target another release. */
+/** @module cli/commands/sitepacks-verify — `browserhive sitepacks verify <path>`: checks a site pack file offline (size, JSON, known strategies, the `SitePackV1` schema and the refinements of spec 13 §9.10) and prints its issues and warnings, or, for a folder, a whole signed registry layout against the pinned root keys (`sitepacks-verify-layout.ts`); exit 0 when valid, 1 otherwise (spec 13 §11.5). A pack file's `min_client` range is not checked: a pack may target another release. */
 import { basename } from 'node:path';
 import { SITE_PACK_MAX_BYTES } from '@browserhive/contracts/site-packs';
 import { loadPackBytes } from '@browserhive/core/server';
 import type { CommandContext } from '../deps.ts';
 import { EXIT, type ExitCode, type Invocation } from '../invocation.ts';
 import { printable } from '../output/printable.ts';
+import { isLayoutDir, printLayoutReport, verifyLayoutDir } from './sitepacks-verify-layout.ts';
 
 type VerifyInvocation = Extract<Invocation, { readonly command: 'sitepacks-verify' }>;
 
@@ -101,6 +102,13 @@ export async function runSitepacksVerify(
   context: CommandContext,
   invocation: VerifyInvocation,
 ): Promise<ExitCode> {
+  if (await isLayoutDir(context, invocation.path)) {
+    return printLayoutReport(
+      context,
+      await verifyLayoutDir(context, invocation.path),
+      invocation.json,
+    );
+  }
   // Everything in the report can come from the (possibly hostile) file: make it printable first
   // (verify #83 N2), JSON included.
   const report = printableReport(await verifyPackFile(context, invocation.path));
