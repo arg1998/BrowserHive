@@ -19,9 +19,10 @@ import type {
 import { serializeError } from '../../kernel/errors/serialize-error.ts';
 import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
+import type { SitePackSourceId } from '../../ports/persistence/site-packs.ts';
 import type { EffectivePack, SitePackLookup, SourceCatalog } from '../../ports/site-packs.ts';
 import * as actions from './registry-actions.ts';
-import { readSigned } from './registry-build.ts';
+import { readCached, readSigned } from './registry-build.ts';
 import { withFreshUsage } from './registry-classify.ts';
 import { packNotFound } from './registry-errors.ts';
 import { prepareFirstUse } from './registry-first-use.ts';
@@ -49,6 +50,9 @@ import {
   type SourceStats,
 } from './registry-types.ts';
 import { toRegistryStats, toRegistryStatus, toSitePackView, toTemplateSitePack } from './views.ts';
+
+/** The principal of automatic decisions (spec 13 §11.8). */
+const SYSTEM_PRINCIPAL = 'browserhive';
 
 /** The site-pack registry. */
 export class SitePackRegistry implements SitePackLookup {
@@ -312,14 +316,30 @@ export class SitePackRegistry implements SitePackLookup {
     by: string,
     options: { readonly auto?: boolean } = {},
   ): Promise<SitePackView> {
-    return this.#act(packId, () =>
-      actions.applyVersion(this.#core(), packId, version, by, options.auto === true),
-    );
+    return this.#act(packId, async () => {
+      await actions.applyVersion(this.#core(), packId, version, by, options.auto === true);
+      if (by !== SYSTEM_PRINCIPAL) await this.#operatorDecision(packId, 'apply');
+    });
+  }
+
+  /** Tells the registry client of an operator's decision (D-87: auto-update's baseline and pause). */
+  async #operatorDecision(packId: string, kind: 'apply' | 'reject' | 'revert' | 'follow_on') {
+    await this.#remote?.operatorDecision?.(packId, kind, this.#snapshot);
+  }
+
+  /** A pack version BrowserHive holds for `source` (the release's bytes or a cached copy), checked again. */
+  async copyOf(source: SitePackSourceId, packId: string, sha256: string) {
+    const bundled = this.#snapshot.bundled.packs.find((p) => p.sha256 === sha256);
+    if (source === 'bundled' && bundled !== undefined) return bundled;
+    return readCached(this.#deps.cache, source, packId, sha256, this.#deps.binaryVersion);
   }
 
   /** Reject a pending version. @throws `SITE_PACK_NOT_FOUND`, `SITE_PACK_UPDATE_NOT_PENDING`. */
   reject(packId: string, version: number, by: string): Promise<SitePackView> {
-    return this.#act(packId, () => actions.rejectVersion(this.#core(), packId, version, by));
+    return this.#act(packId, async () => {
+      await actions.rejectVersion(this.#core(), packId, version, by);
+      if (by !== SYSTEM_PRINCIPAL) await this.#operatorDecision(packId, 'reject');
+    });
   }
 
   /** A publisher revoked `version` (§9.7, `registry-revoke.ts`); for the T4b registry client. */
@@ -339,7 +359,10 @@ export class SitePackRegistry implements SitePackLookup {
 
   /** Restore the previous approved version. @throws `SITE_PACK_NO_PREVIOUS`, `SITE_PACK_BELOW_FLOOR`. */
   revert(packId: string, by: string): Promise<SitePackView> {
-    return this.#act(packId, () => actions.revertVersion(this.#core(), packId, by));
+    return this.#act(packId, async () => {
+      await actions.revertVersion(this.#core(), packId, by);
+      if (by !== SYSTEM_PRINCIPAL) await this.#operatorDecision(packId, 'revert');
+    });
   }
 
   /** Pin the approved version, or unpin (`null`). @throws `VALIDATION_FAILED`. */
@@ -349,7 +372,11 @@ export class SitePackRegistry implements SitePackLookup {
 
   /** Follow updates on, off, or automatically (`null`). */
   setFollow(packId: string, follow: boolean | null, by: string): Promise<SitePackView> {
-    return this.#act(packId, () => actions.setFollow(this.#core(), packId, follow, by));
+    return this.#act(packId, async () => {
+      await actions.setFollow(this.#core(), packId, follow, by);
+      if (follow === true && by !== SYSTEM_PRINCIPAL)
+        await this.#operatorDecision(packId, 'follow_on');
+    });
   }
 
   /** Approve the local file's content by the hash reviewed. @throws `CONFLICT`, `SITE_PACK_INVALID`. */
@@ -407,6 +434,7 @@ export class SitePackRegistry implements SitePackLookup {
       binaryVersion: this.#deps.binaryVersion,
       provenance: (source, sha) => this.#remote?.provenance(source, entry.packId, sha) ?? null,
       refusal: (sha) => this.#remote?.refusal?.(sha) ?? null,
+      autoPaused: (id) => this.#remote?.autoPaused?.(id) ?? false,
     });
   }
 

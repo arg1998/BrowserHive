@@ -19,7 +19,12 @@ import type { Logger } from '../../../ports/logger.ts';
 import type { SitePackProvenanceRecord } from '../../../ports/persistence/site-packs.ts';
 import type { HeldLayoutFile, RegistryFetchResult } from '../../../ports/site-pack-registry.ts';
 import type { SkippedPackVersion } from '../../../ports/site-packs.ts';
-import type { HeldIndex, RemoteFacts, RemoteStatusPart } from '../registry-types.ts';
+import type {
+  HeldIndex,
+  RegistrySnapshot,
+  RemoteFacts,
+  RemoteStatusPart,
+} from '../registry-types.ts';
 import { type Acceptance, acceptLayout, floorsAfter, type LayoutFiles } from './accept.ts';
 import * as ops from './client-ops.ts';
 import {
@@ -165,6 +170,38 @@ export class SitePackRegistryClient implements RemoteFacts {
     }
     if (held === null) return null;
     return { kind: 'remote', keyId: held.signedBy, indexVersion: held.index.version };
+  }
+
+  autoPaused(packId: string): boolean {
+    return this.#record.auto[packId]?.paused === true;
+  }
+
+  /**
+   * An operator decided on a pack (D-87, review #100 N2/N3): Apply sets auto-update's baseline to
+   * the version now in force and resumes it; Revert sets the baseline and pauses it; Reject pauses
+   * it; turning Follow updates on resumes it.
+   */
+  async operatorDecision(
+    packId: string,
+    kind: 'apply' | 'reject' | 'revert' | 'follow_on',
+    snapshotAfter: RegistrySnapshot,
+  ): Promise<void> {
+    const state = snapshotAfter.packs.get(packId)?.state ?? null;
+    const old = this.#record.auto[packId];
+    const inForce = {
+      baseline_sha256: state?.approvedSha256 ?? null,
+      baseline_source: state?.approvedSource ?? null,
+    };
+    const next =
+      kind === 'apply'
+        ? { ...inForce, paused: false }
+        : kind === 'revert'
+          ? { ...inForce, paused: true }
+          : kind === 'reject'
+            ? { ...(old ?? inForce), paused: true }
+            : { ...(old ?? inForce), paused: false };
+    this.#record = { ...this.#record, auto: { ...this.#record.auto, [packId]: next } };
+    await writeClient(this.#deps.meta, this.#record);
   }
 
   refusal(sha256: string): { readonly reason: string; readonly detail: string } | null {

@@ -10,6 +10,8 @@ import type {
 import type { RegistryIndexV1, RegistryPackVersion } from '@browserhive/contracts/site-packs';
 import type { z } from 'zod';
 import { autoApplyHold } from '../../../domain/site-packs/auto-update.ts';
+import { classifyPackChange, NO_TEMPLATES } from '../../../domain/site-packs/classify.ts';
+import { newDomains } from '../../../domain/site-packs/diff.ts';
 import { bestUsable, plainListings } from '../../../domain/site-packs/registry-listing.ts';
 import { serializeError } from '../../../kernel/errors/serialize-error.ts';
 import type { Logger } from '../../../ports/logger.ts';
@@ -151,6 +153,21 @@ async function autoUpdate(ctx: ClientContext): Promise<void> {
     if (approved === null || !followEffective(entry) || entry.state?.pinnedVersion != null)
       continue;
     if (entry.effective?.localOverride === true) continue;
+    const state = entry.state;
+    if (state === null || state.approvedSha256 === null || state.approvedSource === null) continue;
+    // Paused after an operator's revert or reject (review #100 N3).
+    const policy = ctx.record().auto[entry.packId];
+    if (policy?.paused === true) continue;
+    // Bounds are measured against the last operator-decided version, so steps cannot compound
+    // (N2); a version a past auto-update (or revocation) put in force without a recorded
+    // baseline is not built on.
+    const baseline =
+      policy?.baseline_sha256 != null && policy.baseline_source !== null
+        ? { sha: policy.baseline_sha256, source: policy.baseline_source }
+        : state.approvedBy !== SYSTEM
+          ? { sha: state.approvedSha256, source: state.approvedSource }
+          : null;
+    if (baseline === null) continue;
     const row = entry.pending.find(
       (p) => p.source === 'remote' && p.classification !== 'revoked' && p.toVersion !== null,
     );
@@ -162,15 +179,32 @@ async function autoUpdate(ctx: ClientContext): Promise<void> {
       const fresh = registry.snapshotNow().packs.get(entry.packId);
       const decided = fresh?.pending.find((p) => p.eventId === row.eventId);
       if (decided === undefined || decided.decision !== 'downloaded') continue;
-      const hold = autoApplyHold(
-        approved.pack,
-        copy.pack,
-        decided.classification,
-        decided.newDomains,
-      );
+      const base =
+        baseline.sha === state.approvedSha256
+          ? approved
+          : await registry.copyOf(baseline.source, entry.packId, baseline.sha);
+      if (base === null) continue;
+      const cumulative = classifyPackChange(base.pack, copy.pack, NO_TEMPLATES).classification;
+      const hold =
+        autoApplyHold(approved.pack, copy.pack, decided.classification, decided.newDomains) ??
+        autoApplyHold(base.pack, copy.pack, cumulative, newDomains(base.pack, copy.pack));
       if (hold !== null) {
         ctx.log.info('auto-update waits', { packId: entry.packId, version, hold });
         continue;
+      }
+      if (policy === undefined) {
+        // The first auto step records the operator's version as the baseline of the next ones.
+        await ctx.setRecord({
+          ...ctx.record(),
+          auto: {
+            ...ctx.record().auto,
+            [entry.packId]: {
+              baseline_sha256: baseline.sha,
+              baseline_source: baseline.source,
+              paused: false,
+            },
+          },
+        });
       }
       await registry.apply(entry.packId, version, SYSTEM, { auto: true });
       ctx.log.info('pack auto-updated', { packId: entry.packId, version });

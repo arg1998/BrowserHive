@@ -243,7 +243,7 @@ function checkItems(status: SitePackRegistryStatus): KeyValueItem[] {
         <span className="flex flex-col gap-0.5">
           <span className="text-pretty">
             {status.auto_update
-              ? 'On: followed packs take updates that only tighten rules by themselves'
+              ? 'On: followed packs take, by themselves, only updates that cannot stop or slow agents on the site'
               : 'Off: every update waits for you'}
           </span>
           <ConfigKey name="sitePacksAutoUpdate" />

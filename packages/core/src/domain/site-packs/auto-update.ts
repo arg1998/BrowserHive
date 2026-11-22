@@ -1,8 +1,8 @@
-/** @module domain/site-packs/auto-update — whether auto-update may apply a registry candidate by itself (spec 13 §9.7 "Apply rules", D-85, D-87; owner policy "stealth and security first class"): only changes that cannot stop or block agents' work on a site. A stolen online key must not be able to halt a followed site for agents by publishing a "tightening" version: so beyond the classifier's verdict (only `tightening` or `neutral`, no domain change), a version waits for an operator when it adds or changes a challenge or an element guard, adds a host-wide blocking guard or more than {@link AUTO_MAX_ADDED_BLOCKING} newly blocking guards, turns `sign_in.human_only` on, lowers `concurrency.max_sessions`, adds a pace rule, adds or removes a strategy, or slows a launch gap, pace limit or numeric strategy parameter by more than {@link AUTO_MAX_SLOWDOWN}×. */
+/** @module domain/site-packs/auto-update — whether auto-update may apply a registry candidate by itself (spec 13 §9.7 "Apply rules", D-85, D-87; owner policy "stealth and security first class"): only changes that cannot stop or block agents' work on a site. A stolen online key must not be able to halt a followed site for agents by publishing a "tightening" version: so beyond the classifier's verdict (only `tightening` or `neutral`, no domain change), a version waits for an operator when it adds or changes a challenge or an element guard, adds or changes any guard that can block or hold a request (`block`, `confirm`, `write_policy`), raises the default write policy, adds or changes more than {@link AUTO_MAX_ADDED_BLOCKING} guards of any kind, turns `sign_in.human_only` on, lowers `concurrency.max_sessions`, adds a pace rule, adds or removes a strategy, or slows a launch gap, pace limit or numeric strategy parameter by more than {@link AUTO_MAX_SLOWDOWN}×. */
 
 import type { PackGuard, SitePackV1 } from '@browserhive/contracts/site-packs';
 
-/** Blocking (`block`, `confirm`) network guards one auto-applied version may make newly blocking. */
+/** Guards (of any action) one auto-applied version may add or change. */
 export const AUTO_MAX_ADDED_BLOCKING = 3;
 /** How much slower one auto-applied version may make launches, pacing or a strategy parameter. */
 export const AUTO_MAX_SLOWDOWN = 2;
@@ -20,9 +20,13 @@ export type AutoApplyHold =
   | 'human_only'
   | 'concurrency'
   | 'pacing'
-  | 'strategies';
+  | 'strategies'
+  | 'blocking_guard'
+  | 'write_policy';
 
-const BLOCKING: ReadonlySet<string> = new Set(['block', 'confirm']);
+/** Guard actions that can stop or hold an agent's request (`write_policy` holds under a `warn`/`confirm` default). */
+const HOLDING: ReadonlySet<string> = new Set(['block', 'confirm', 'write_policy']);
+const POLICY_RANK: Readonly<Record<string, number>> = { allow: 0, warn: 1, confirm: 2 };
 
 /** A glob whose path part is only a wildcard (`host/*`, `*.host/*`): it covers a whole host. */
 function hostWide(guard: PackGuard): boolean {
@@ -48,6 +52,15 @@ function pacingHold(from: SitePackV1, to: SitePackV1): boolean {
   const gapBefore = from.pacing?.min_launch_gap_s ?? 0;
   const gapAfter = to.pacing?.min_launch_gap_s ?? 0;
   if (gapAfter > Math.max(gapBefore * AUTO_MAX_SLOWDOWN, GAP_FREE_S)) return true;
+  const keepBefore = from.keeper?.interval_hours;
+  const keepAfter = to.keeper?.interval_hours;
+  if (
+    keepBefore !== undefined &&
+    keepAfter !== undefined &&
+    keepAfter > keepBefore * AUTO_MAX_SLOWDOWN
+  ) {
+    return true;
+  }
   const before = new Map((from.pacing?.rules ?? []).map((r) => [r.id, r]));
   for (const rule of to.pacing?.rules ?? []) {
     const old = before.get(rule.id);
@@ -100,12 +113,16 @@ export function autoApplyHold(
   if (maxAfter < maxBefore) return 'concurrency';
   if (pacingHold(from, to)) return 'pacing';
   if (strategiesHold(from, to)) return 'strategies';
-  // A guard is "added" when it is new or newly blocking (an action made `block` or `confirm`).
-  const before = new Map((from.guards ?? []).map((g) => [g.id, g.action]));
-  const added = (to.guards ?? []).filter(
-    (g) => BLOCKING.has(g.action) && !BLOCKING.has(before.get(g.id) ?? ''),
-  );
-  if (added.some(hostWide)) return 'host_wide_guard';
-  if (added.length > AUTO_MAX_ADDED_BLOCKING) return 'too_many_blocking_guards';
+  // Review #100 N1: a new or changed guard that can block or hold requests waits, whatever its
+  // glob (a short prefix such as `api.host/v*` blocks a whole API); so does a stricter default
+  // write policy. Every other guard change (a `warn`) counts against the cap.
+  const before = new Map((from.guards ?? []).map((g) => [g.id, json(g)]));
+  const changed = (to.guards ?? []).filter((g) => before.get(g.id) !== json(g));
+  if (changed.some((g) => HOLDING.has(g.action) && hostWide(g))) return 'host_wide_guard';
+  if (changed.some((g) => HOLDING.has(g.action))) return 'blocking_guard';
+  if ((POLICY_RANK[to.write_policy.default] ?? 0) > (POLICY_RANK[from.write_policy.default] ?? 0)) {
+    return 'write_policy';
+  }
+  if (changed.length > AUTO_MAX_ADDED_BLOCKING) return 'too_many_blocking_guards';
   return null;
 }

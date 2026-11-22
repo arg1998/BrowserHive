@@ -354,10 +354,22 @@ describe('pending versions', () => {
       ),
     );
     expect(
-      await screen.findByText(/On: followed packs take updates that only tighten rules/),
+      await screen.findByText(
+        /On: followed packs take, by themselves, only updates that cannot stop/,
+      ),
     ).toBeDefined();
     expect(screen.getAllByText(/Auto-updated/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('browserhive.ai registry').length).toBeGreaterThan(0);
+    await expectNoA11yViolations(view.container, AXE);
+  });
+});
+
+describe('auto-update paused (review #100 N3)', () => {
+  it('marks a pack whose auto-update an operator paused', async () => {
+    const view = mount(
+      list([linkedin({ auto_update_paused: true })], onlineStatus({ auto_update: true })),
+    );
+    expect((await screen.findAllByText('Auto-update paused')).length).toBeGreaterThan(0);
     await expectNoA11yViolations(view.container, AXE);
   });
 });

@@ -29,7 +29,8 @@ function withGuards(n: number, extra: Partial<SitePackV1['guards'][number]> = {}
 
 describe('autoApplyHold', () => {
   it('applies tightening or neutral versions within the cap', () => {
-    expect(autoApplyHold(base, withGuards(AUTO_MAX_ADDED_BLOCKING), 'tightening', [])).toBeNull();
+    const warns = withGuards(AUTO_MAX_ADDED_BLOCKING, { action: 'warn' });
+    expect(autoApplyHold(base, warns, 'tightening', [])).toBeNull();
     expect(autoApplyHold(base, { ...base, version: 2, title: 'x' }, 'neutral', [])).toBeNull();
   });
 
@@ -39,10 +40,10 @@ describe('autoApplyHold', () => {
     expect(autoApplyHold(base, base, 'tightening', ['other.test'])).toBe('domains');
   });
 
-  it('holds more than the cap of new blocking guards, a host-wide one, or a broad element guard', () => {
-    expect(autoApplyHold(base, withGuards(AUTO_MAX_ADDED_BLOCKING + 1), 'tightening', [])).toBe(
-      'too_many_blocking_guards',
-    );
+  it('holds more guards than the cap, any guard that can block or hold, a host-wide one, or an element guard', () => {
+    const warns = withGuards(AUTO_MAX_ADDED_BLOCKING + 1, { action: 'warn' });
+    expect(autoApplyHold(base, warns, 'tightening', [])).toBe('too_many_blocking_guards');
+    expect(autoApplyHold(base, withGuards(1), 'tightening', [])).toBe('blocking_guard');
     const hostWide = withGuards(1, { match: { url: `www.${ID}/*` } });
     expect(autoApplyHold(base, hostWide, 'tightening', [])).toBe('host_wide_guard');
     const broad: SitePackV1 = {
@@ -120,9 +121,39 @@ describe('autoApplyHold', () => {
   });
 
   it('counts an existing guard made blocking like a new one', () => {
-    const warned: SitePackV1 = { ...withGuards(4, { action: 'warn' }), version: 1 };
-    const blocked = withGuards(4);
-    expect(autoApplyHold(warned, blocked, 'tightening', [])).toBe('too_many_blocking_guards');
+    const warned: SitePackV1 = { ...withGuards(1, { action: 'warn' }), version: 1 };
+    expect(autoApplyHold(warned, withGuards(1), 'tightening', [])).toBe('blocking_guard');
+  });
+
+  it('holds what blocks agents through guards (review #100 N1)', () => {
+    // B2: 25 write_policy guards on short prefixes.
+    const policyGuards: SitePackV1 = {
+      ...base,
+      version: 2,
+      guards: [
+        ...base.guards,
+        ...'bcdefghijkmnopqrstuvwxyz'.split('').map((c, i) => ({
+          id: `w-${i}`,
+          kind: 'write' as const,
+          match: { url: `www.${ID}/${c}*`, methods: ['GET' as const] },
+          action: 'write_policy' as const,
+        })),
+      ],
+    };
+    expect(autoApplyHold(base, policyGuards, 'tightening', [])).toBe('blocking_guard');
+    // B3: the default write policy raised.
+    const allow: SitePackV1 = { ...base, write_policy: { ...base.write_policy, default: 'allow' } };
+    expect(
+      autoApplyHold(
+        allow,
+        { ...allow, write_policy: { ...allow.write_policy, default: 'confirm' } },
+        'tightening',
+        [],
+      ),
+    ).toBe('write_policy');
+    // B1: three blocking guards on broad prefixes, within the old cap.
+    const prefixes = withGuards(3, { match: { url: `api.${ID}/v*` } });
+    expect(autoApplyHold(base, prefixes, 'tightening', [])).toBe('blocking_guard');
   });
 });
 

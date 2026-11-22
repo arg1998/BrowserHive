@@ -16,7 +16,11 @@ const NOW = Date.UTC(2026, 10, 22, 10);
 const PACK = 'pack-a.test';
 
 /** A stricter version: one more blocking guard (tightening). */
-function tighter(version: number, extra: Partial<SitePackV1Input> = {}): SitePackV1Input {
+function tighter(
+  version: number,
+  extra: Partial<SitePackV1Input> = {},
+  action: 'block' | 'warn' = 'block',
+): SitePackV1Input {
   const base = sitePack(PACK, version, extra);
   return {
     ...base,
@@ -26,7 +30,7 @@ function tighter(version: number, extra: Partial<SitePackV1Input> = {}): SitePac
         id: 'delete',
         kind: 'destructive',
         match: { url: `www.${PACK}/delete`, methods: ['DELETE'] },
-        action: 'block',
+        action,
       },
     ],
   };
@@ -165,8 +169,8 @@ describe('Download all', () => {
 });
 
 describe('auto-update', () => {
-  it('downloads and applies a tightening candidate of a followed pack', async () => {
-    const { kit } = await kitWith([{ pack: tighter(2) }], { autoUpdate: true });
+  it('downloads and applies a tightening candidate of a followed pack that cannot stop agents', async () => {
+    const { kit } = await kitWith([{ pack: tighter(2, {}, 'warn') }], { autoUpdate: true });
     await kit.client.check();
     const view = kit.registry.get(PACK);
     expect(view?.approved).toEqual(expect.objectContaining({ version: 2, by: 'browserhive' }));
@@ -223,8 +227,70 @@ describe('auto-update', () => {
     expect(kit.registry.get(PACK)?.pending[0]?.state).toBe('downloaded');
   });
 
+  it('measures every step against the operator version, so small steps cannot compound (review #100 N2)', async () => {
+    const root = testKey();
+    const online = testKey();
+    const gap = (v: number, s: number) => ({
+      ...sitePack(PACK, v),
+      pacing: { rules: [], min_launch_gap_s: s },
+    });
+    const { kit, fetcher } = await kitWith([{ pack: gap(2, 30) }], {
+      autoUpdate: true,
+      root,
+      online,
+    });
+    await kit.client.check();
+    expect(kit.registry.get(PACK)?.approved?.version).toBe(2);
+    // v3 doubles the gap of v2 (within 2× of the version in force), but 60 s is past 2× of the
+    // operator's 0 s (beyond the 30 s that are free): it waits.
+    fetcher.files = signRegistry({
+      now: NOW,
+      root,
+      online,
+      indexVersion: 11,
+      versions: [{ pack: gap(3, 60) }],
+    }).files;
+    await kit.client.check();
+    expect(kit.registry.get(PACK)?.approved?.version).toBe(2);
+    expect(kit.registry.get(PACK)?.pending[0]).toMatchObject({ version: 3, state: 'downloaded' });
+  });
+
+  it('pauses after an operator reverts an auto-applied version, until Follow is turned on (review #100 N3)', async () => {
+    const root = testKey();
+    const online = testKey();
+    const { kit, fetcher } = await kitWith([{ pack: tighter(2, {}, 'warn') }], {
+      autoUpdate: true,
+      root,
+      online,
+    });
+    await kit.client.check();
+    expect(kit.registry.get(PACK)?.approved?.version).toBe(2);
+    await kit.registry.revert(PACK, 'admin');
+    expect(kit.registry.get(PACK)?.auto_update_paused).toBe(true);
+    fetcher.files = signRegistry({
+      now: NOW,
+      root,
+      online,
+      indexVersion: 11,
+      versions: [{ pack: tighter(3, { title: 'v3' }, 'warn') }],
+    }).files;
+    await kit.client.check();
+    expect(kit.registry.get(PACK)?.approved?.version).toBe(1);
+    await kit.registry.setFollow(PACK, true, 'admin');
+    expect(kit.registry.get(PACK)?.auto_update_paused).toBe(false);
+    fetcher.files = signRegistry({
+      now: NOW,
+      root,
+      online,
+      indexVersion: 12,
+      versions: [{ pack: tighter(4, { title: 'v4' }, 'warn') }],
+    }).files;
+    await kit.client.check();
+    expect(kit.registry.get(PACK)?.approved?.version).toBe(4);
+  });
+
   it('never touches a pinned pack', async () => {
-    const { kit } = await kitWith([{ pack: tighter(2) }], { autoUpdate: true });
+    const { kit } = await kitWith([{ pack: tighter(2, {}, 'warn') }], { autoUpdate: true });
     await kit.registry.pin(PACK, 1, 'admin');
     await kit.client.check();
     expect(kit.registry.get(PACK)?.approved?.version).toBe(1);

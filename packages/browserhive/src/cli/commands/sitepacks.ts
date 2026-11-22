@@ -282,6 +282,12 @@ function viewPairs(view: SitePackView): [string, string][] {
     pairs.push(['offered', `v${o.version} · ${provenanceText(o.source, o.provenance)}`]);
     pairs.push(['offered sha-256', o.sha256]);
   }
+  if (view.auto_update_paused) {
+    pairs.push([
+      'auto-update',
+      'paused after you reverted or rejected a registry version; apply a version or `sitepacks follow <id> on` to resume',
+    ]);
+  }
   if (view.approved_revoked) {
     pairs.push([
       'revoked',

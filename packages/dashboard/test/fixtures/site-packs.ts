@@ -30,6 +30,7 @@ export function packView(patch: Partial<SitePackView> = {}): SitePackView {
     sources: ['bundled'],
     online: null,
     approved_revoked: false,
+    auto_update_paused: false,
     approved: {
       version: 3,
       sha256: sha('a'),

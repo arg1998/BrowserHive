@@ -35,6 +35,8 @@ import type {
 export interface RemoteViewFacts {
   readonly held: HeldIndex | null;
   readonly binaryVersion: string;
+  /** Auto-update paused for a pack after an operator's revert or reject (D-87). */
+  readonly autoPaused?: (packId: string) => boolean;
   /** The last refused download of a file. */
   readonly refusal?: (
     sha256: string,
@@ -91,6 +93,7 @@ export function toSitePackView(
     sources: sourcesOf(entry),
     online: onlineOf(entry, remote.binaryVersion),
     approved_revoked: approvedRevoked(entry),
+    auto_update_paused: remote.autoPaused?.(entry.packId) ?? false,
     approved: approvedOf(entry),
     offer:
       entry.offer === null

@@ -437,7 +437,7 @@ Payloads of `kind: "event"` frames, discriminated on `type`. DTO fields (`sessio
 
 | Field | Type | Required | Constraints |
 |---|---|---|---|
-| `view` | `object` | yes | keys `pack_id`, `title`, `domains`, `identity_provider`, `sources`, `online`, `approved`, `offer`, `approved_revoked`, `previous`, `pinned_version`, `follow`, `enabled`, `local`, `local_override`, `pending`, `used_by`, `human_only`, `write_policy_default`, `stance`, `write_guards`, `verified`, `skipped` |
+| `view` | `object` | yes | keys `pack_id`, `title`, `domains`, `identity_provider`, `sources`, `online`, `approved`, `offer`, `approved_revoked`, `auto_update_paused`, `previous`, `pinned_version`, `follow`, `enabled`, `local`, `local_override`, `pending`, `used_by`, `human_only`, `write_policy_default`, `stance`, `write_guards`, `verified`, `skipped` |
 
 <a id="event-site_pack-pending"></a>
 ### `site_pack.pending`

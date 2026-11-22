@@ -29,8 +29,40 @@ export interface ClientRecord {
   readonly clock_skew_ms?: number;
   /** A newer `keys.json`'s `index_floor` not consumed yet (honoured with the next accepted index). */
   readonly pending_index_floor: number | null;
+  /**
+   * Auto-update per pack (D-87, review #100 N2/N3): the content the last operator decision put in
+   * force (every bound is measured against it, so small steps cannot compound) and whether an
+   * operator's revert or reject paused auto-update.
+   */
+  readonly auto: Readonly<Record<string, AutoPolicy>>;
   /** `<pack>@<version>:<sha256>` revocations already applied (never applied twice). */
   readonly revocations: readonly string[];
+}
+
+/** Auto-update's baseline and pause for one pack. */
+export interface AutoPolicy {
+  readonly baseline_sha256: string | null;
+  readonly baseline_source: 'bundled' | 'remote' | 'import' | 'local' | null;
+  readonly paused: boolean;
+}
+
+const SOURCES: ReadonlySet<string> = new Set(['bundled', 'remote', 'import', 'local']);
+
+function autoOf(value: unknown): Record<string, AutoPolicy> {
+  if (typeof value !== 'object' || value === null) return {};
+  const out: Record<string, AutoPolicy> = {};
+  for (const [packId, raw] of Object.entries(value as Record<string, unknown>).slice(0, 1_000)) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const r = raw as Record<string, unknown>;
+    const source = strOrNull(r['baseline_source']);
+    out[packId] = {
+      baseline_sha256: strOrNull(r['baseline_sha256']),
+      baseline_source:
+        source !== null && SOURCES.has(source) ? (source as AutoPolicy['baseline_source']) : null,
+      paused: r['paused'] === true,
+    };
+  }
+  return out;
 }
 
 /** A fresh record. */
@@ -46,6 +78,7 @@ export const EMPTY_CLIENT: ClientRecord = {
   index_origin: null,
   origin_name: null,
   pending_index_floor: null,
+  auto: {},
   revocations: [],
 };
 
@@ -119,6 +152,7 @@ export async function readClient(meta: SitePackMetaRepository): Promise<ClientRe
       origin !== null && ORIGINS.has(origin) ? (origin as ClientRecord['index_origin']) : null,
     origin_name: strOrNull(r['origin_name']),
     pending_index_floor: numOrNull(r['pending_index_floor']),
+    auto: autoOf(r['auto']),
     ...(skew !== null && { clock_skew_ms: Math.trunc(skew) }),
     revocations: Array.isArray(r['revocations'])
       ? r['revocations'].filter((x): x is string => typeof x === 'string').slice(0, 5_000)

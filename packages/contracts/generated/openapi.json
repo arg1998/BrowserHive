@@ -28467,6 +28467,9 @@
                 "approved_revoked": {
                   "type": "boolean"
                 },
+                "auto_update_paused": {
+                  "type": "boolean"
+                },
                 "previous": {
                   "type": [
                     "object",
@@ -28863,6 +28866,7 @@
                 "approved",
                 "offer",
                 "approved_revoked",
+                "auto_update_paused",
                 "previous",
                 "pinned_version",
                 "follow",
@@ -30828,6 +30832,9 @@
               "approved_revoked": {
                 "type": "boolean"
               },
+              "auto_update_paused": {
+                "type": "boolean"
+              },
               "previous": {
                 "type": [
                   "object",
@@ -31224,6 +31231,7 @@
               "approved",
               "offer",
               "approved_revoked",
+              "auto_update_paused",
               "previous",
               "pinned_version",
               "follow",
@@ -32684,6 +32692,9 @@
               "approved_revoked": {
                 "type": "boolean"
               },
+              "auto_update_paused": {
+                "type": "boolean"
+              },
               "previous": {
                 "type": [
                   "object",
@@ -33080,6 +33091,7 @@
               "approved",
               "offer",
               "approved_revoked",
+              "auto_update_paused",
               "previous",
               "pinned_version",
               "follow",
@@ -33579,6 +33591,9 @@
               "approved_revoked": {
                 "type": "boolean"
               },
+              "auto_update_paused": {
+                "type": "boolean"
+              },
               "previous": {
                 "type": [
                   "object",
@@ -33975,6 +33990,7 @@
               "approved",
               "offer",
               "approved_revoked",
+              "auto_update_paused",
               "previous",
               "pinned_version",
               "follow",

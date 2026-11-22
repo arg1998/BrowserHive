@@ -152,6 +152,14 @@ export function PackApprovedCell({ pack }: { readonly pack: SitePackView }) {
       ) : autoUpdated(pack) ? (
         <span className="text-muted-foreground">Auto-updated</span>
       ) : null}
+      {pack.auto_update_paused ? (
+        <span
+          className="text-muted-foreground"
+          title="You reverted or rejected a registry version, so auto-update leaves this pack alone until you apply a version or turn Follow updates on."
+        >
+          Auto-update paused
+        </span>
+      ) : null}
     </span>
   );
 }

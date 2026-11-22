@@ -66,6 +66,14 @@ export interface RemoteFacts {
   ): SitePackProvenanceRecord | null;
   /** The client's fields of the registry status. */
   status(): RemoteStatusPart;
+  /** An operator decided on a pack (auto-update's baseline and pause, D-87). */
+  operatorDecision?(
+    packId: string,
+    kind: 'apply' | 'reject' | 'revert' | 'follow_on',
+    snapshotAfter: RegistrySnapshot,
+  ): Promise<void>;
+  /** Auto-update paused for this pack (`auto_update_paused`). */
+  autoPaused?(packId: string): boolean;
   /** The last refused download of this content-addressed file (`pending[].refused`). */
   refusal?(sha256: string): { readonly reason: string; readonly detail: string } | null;
   /** Signed layouts of the local folder, verified at each reload (after the registry's load). */

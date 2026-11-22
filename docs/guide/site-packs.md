@@ -146,17 +146,22 @@ The check always fetches the whole index, for every pack. **Follow updates** (au
 
 [`sitePacksAutoUpdate`](../reference/configuration.md#sitePacksAutoUpdate) is off by default. When you turn it on, BrowserHive downloads and applies a registry version by itself only when the change cannot stop or block your agents' work. All of these must hold:
 
-- the pack is followed, approved, not pinned, and has no local file in force;
+- the pack is followed, approved, not pinned, has no local file in force, and its automatic updates are not paused (see below);
 - the version is classified **Tightens rules** or **No rule change**: nothing relaxes a rule and nothing can stop the site;
 - it adds or removes no domain;
 - it adds, removes or changes no challenge and no element guard (a button or link agents must not use);
-- it adds no blocking guard over a whole host, and makes at most three network guards newly block or ask;
+- it adds or changes no guard that can block or hold a request (`block`, `confirm`, or a `write_policy` guard), whatever its address, and adds or changes at most three guards in all (flag-only `warn` guards);
+- it does not make the default write policy stricter;
 - it does not turn on **sign-in by a person only** (`sign_in.human_only`);
 - it does not lower how many sessions the site allows at once (`concurrency.max_sessions`);
 - it slows agents by at most a factor of 2: no new pace rule and no change to a rule's period or guard, a pace limit at least half the old one, and a launch gap (`pacing.min_launch_gap_s`) at most twice the old one (or 30 seconds, if that is more);
-- it adds or removes no strategy, moves no numeric strategy parameter by more than a factor of 2 either way, and changes no other strategy parameter.
+- it adds or removes no strategy, moves no numeric strategy parameter by more than a factor of 2 either way, and changes no other strategy parameter; it does not make the keep-alive interval more than twice as long.
 
-Such a decision is recorded as made by `browserhive` ("Applied automatically"). Anything else is downloaded and waits for you, with the badge and the notification. Versions that relax rules or can stop a site, domain changes, bundled versions, imports and local files are never applied automatically, and the stealth floor is checked as on any Apply. A stolen signing key can therefore at most make small tightening changes to followed packs, and only with automatic updates on.
+Every one of these limits is measured twice: against the version in force, and against the last version **you** decided on (applied, or reverted to). A run of small automatic steps can therefore never add up to more than one step from your version: once they would, the next version waits for you.
+
+If you **Revert** a pack, or **Reject** one of its registry versions, automatic updates pause for that pack (the table shows "Auto-update paused"); they resume when you apply a version or turn **Follow updates** on.
+
+Such a decision is recorded as made by `browserhive` ("Applied automatically"). Anything else is downloaded and waits for you, with the badge and the notification. Versions that relax rules or can stop a site, domain changes, bundled versions, imports and local files are never applied automatically, and the stealth floor is checked as on any Apply. A stolen signing key can therefore at most flag more requests (`warn`) or make small, bounded tightening changes to followed packs, and only with automatic updates on.
 
 ### Revoked versions
 
