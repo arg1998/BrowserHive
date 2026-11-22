@@ -2,7 +2,7 @@
 
 import type { BrowserContextOptions, LaunchOptions } from 'playwright';
 import { z } from 'zod';
-import { assertLaunchArgsAllowed } from '../../kernel/deny-list.ts';
+import { assertLaunchArgsAllowed, launchArgKey } from '../../kernel/deny-list.ts';
 import { AppError } from '../../kernel/errors/app-error.ts';
 import type { ProxySpec } from '../../ports/browser-driver.ts';
 
@@ -124,7 +124,10 @@ function unsafeField(field: string): AppError<'UNSAFE_LAUNCH_ARG'> {
   );
 }
 
-/** Chromium flags that configure egress at the command line, bypassing the structured `proxy` option. */
+/**
+ * Chromium flags that configure egress at the command line, bypassing the structured `proxy` option.
+ * Matched on {@link launchArgKey}, so every spelling Chromium accepts (`-proxy-server=…`) counts.
+ */
 export const PROXY_ARG_PREFIXES: readonly string[] = [
   '--proxy-server',
   '--proxy-pac-url',
@@ -133,8 +136,8 @@ export const PROXY_ARG_PREFIXES: readonly string[] = [
 
 /**
  * Whether the caller brought their own egress proxy, by any of the routes Playwright and Chromium
- * accept: `launchOptions.proxy`, `contextOptions.proxy`, a raw `--proxy-*` launch arg, or (D-13) a
- * typed `LaunchSpec.proxy`.
+ * accept: `launchOptions.proxy`, `contextOptions.proxy`, a raw `--proxy-*` launch arg (in any switch
+ * spelling Chromium accepts), or (D-13) a typed `LaunchSpec.proxy`.
  *
  * This is the trigger for the **downgrade rule**. A host-derived seed asserted over someone else's
  * exit IP is the "US identity over a DE proxy" case — trivially caught, and strictly worse than the
@@ -155,7 +158,10 @@ export function byoProxyPresent(
   if (contextOptions?.proxy !== undefined) return true;
   const args = launchOptions?.args;
   if (!Array.isArray(args)) return false;
-  return args.some((arg) => PROXY_ARG_PREFIXES.some((prefix) => arg.startsWith(prefix)));
+  return args.some((arg) => {
+    const key = launchArgKey(arg);
+    return key !== null && PROXY_ARG_PREFIXES.includes(key);
+  });
 }
 
 /**

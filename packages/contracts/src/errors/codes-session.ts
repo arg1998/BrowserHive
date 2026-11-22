@@ -157,7 +157,7 @@ export const SESSION_ERRORS = {
     details: z.object({ arg: z.string() }),
     docs: true,
     cause:
-      'A Chromium flag that changes the profile directory, sandbox or debugging surface was passed.',
+      'A Chromium flag that changes the profile directory, sandbox or debugging surface was passed, in any spelling Chromium accepts (`--`, `-` or `/` prefix, any letter case), or a bare `--`.',
     resolution:
       'Use the persistence modes and channel options instead of raw isolation-breaking flags.',
   }),

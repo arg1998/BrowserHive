@@ -56,6 +56,8 @@ describe('byoProxyPresent', () => {
     // Without this the identity layer would assert a host locale over an egress it cannot see.
     expect(byoProxyPresent({ args: ['--proxy-server=http://p:1'] }, undefined)).toBe(true);
     expect(byoProxyPresent({ args: ['--proxy-pac-url=http://p/pac'] }, undefined)).toBe(true);
+    expect(byoProxyPresent({ args: ['-proxy-server=http://p:1'] }, undefined)).toBe(true);
+    expect(byoProxyPresent({ args: [' /PROXY-SERVER=http://p:1'] }, undefined)).toBe(true);
     expect(byoProxyPresent({ args: ['--host-resolver-rules=MAP * 1.2.3.4'] }, undefined)).toBe(
       true,
     );

@@ -146,7 +146,7 @@ Per-session overrides (`launch_session`): `stealth`, `fingerprint`, `humanize`, 
 
 ## 4. Launch-arg deny-list
 
-Purpose: protect BrowserHive's own guarantees (isolation, managed data-dir, closed remote debugging). Enforced once in the `validate` phase before any spawn, on the trimmed key before `=`, case-sensitive; first offender ⇒ `UNSAFE_LAUNCH_ARG`. Internal stealth args bypass it. The constant is the single source of truth and a test asserts every entry is rejected.
+Purpose: protect BrowserHive's own guarantees (isolation, managed data-dir, closed remote debugging). Enforced once in the `validate` phase before any spawn, on the switch name Chromium itself would read from each arg; first offender ⇒ `UNSAFE_LAUNCH_ARG`. Normalisation mirrors `IsSwitch` in Chromium's `base/command_line.cc`: trim the arg, strip one switch prefix (`--`, else `-`, else `/` — Chromium accepts `/` on Windows only; it is stripped on every platform because refusing is the safe side), take the name before `=`, trim it and lowercase it (Windows switch names are case-insensitive). An arg with no prefix is not a switch and is not deny-checked. A bare `--` (Chromium's end-of-switches marker) is refused outright. Normalisation is not a change to the list's contents (§10); the entries stay in their `--name` form. Internal stealth args bypass it. The constant is the single source of truth and a test asserts every entry is rejected.
 
 `--user-data-dir`, `--profile-directory`, `--disk-cache-dir`, `--no-sandbox`, `--disable-setuid-sandbox`, `--disable-web-security`, `--disable-site-isolation-trials`, `--disable-features`, `--single-process`, `--no-zygote`, `--remote-debugging-port`, `--remote-debugging-pipe`, `--remote-debugging-address`.
 

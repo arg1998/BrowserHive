@@ -102,6 +102,7 @@ describe('deny-list interplay', () => {
   it('rejects every deny-listed key passed through user args, while stealth args bypass the check', () => {
     for (const key of DENIED_LAUNCH_ARG_KEYS) {
       expect(() => assertLaunchOptionsAllowed({ args: [`${key}=x`] })).toThrow();
+      expect(() => assertLaunchOptionsAllowed({ args: [`-${key.slice(2)}=x`] })).toThrow();
     }
     // The internally-injected stealth arg is never deny-checked and never denied.
     expect(() => assertLaunchOptionsAllowed({ args: [...STEALTH_ARGS] })).not.toThrow();

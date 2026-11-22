@@ -1,8 +1,12 @@
 /** @module domain/policies/proxy-request — extracts a caller-supplied (BYO) proxy from launch/context options into a ProxySpec (D-13). */
 
+import { launchArgKey } from '../../kernel/deny-list.ts';
 import type { ProxySpec } from '../../ports/browser-driver.ts';
 
-/** Chromium proxy flags a caller may pass raw until a managed proxy layer exists (spec 11 §4). */
+/**
+ * Chromium proxy flags a caller may pass raw until a managed proxy layer exists (spec 11 §4). Matched
+ * on {@link launchArgKey}, so every spelling Chromium accepts (`-proxy-server=…`) counts.
+ */
 export const PROXY_ARG_PREFIXES: readonly string[] = [
   '--proxy-server',
   '--proxy-pac-url',
@@ -58,8 +62,8 @@ export function requestedProxy(
   if (Array.isArray(args)) {
     for (const arg of args) {
       if (typeof arg !== 'string') continue;
-      const key = arg.trim().split('=')[0] ?? '';
-      if (PROXY_ARG_PREFIXES.includes(key)) {
+      const key = launchArgKey(arg);
+      if (key !== null && PROXY_ARG_PREFIXES.includes(key)) {
         const value = arg.includes('=') ? arg.slice(arg.indexOf('=') + 1) : '';
         return {
           server: value,
