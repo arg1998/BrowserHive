@@ -355,4 +355,82 @@ describe('stale and floors', () => {
     expect(two.registry.status().index_version).toBe(10);
     expect(two.registry.get(PACK)?.online?.version).toBe(2);
   });
+
+  it('a newer keys.json with index_floor next to an unchanged index keeps the reset pending (review #100 M2)', async () => {
+    const root = testKey();
+    const online = testKey();
+    const ff = signRegistry({ now: NOW, root, online, indexVersion: 90_010, versions: [] });
+    const kit = await createClientKit({ registry: ff, clock: new FakeClock(NOW) });
+    await kit.client.check();
+    // keys v2 resets the floor to 10, but the CDN still serves the fast-forwarded index.
+    const keys2 = signRegistry({
+      now: NOW,
+      root,
+      online,
+      keysVersion: 2,
+      keys: { index_floor: 10 },
+      versions: [],
+    });
+    const files = new Map(ff.files);
+    for (const f of ['keys.json', 'keys.json.sig'])
+      files.set(f, keys2.files.get(f) ?? new Uint8Array());
+    const fetcher = kit.fetcher as MemoryFetcher;
+    fetcher.files = files;
+    expect((await kit.client.check()).outcome).toBe('not_modified');
+    // The legitimate index 11 under keys v2 is then accepted.
+    fetcher.files = signRegistry({
+      now: NOW,
+      root,
+      online,
+      keysVersion: 2,
+      indexVersion: 11,
+      keys: { index_floor: 10 },
+      versions: [],
+    }).files;
+    expect((await kit.client.check()).outcome).toBe('updated');
+    expect(floors(kit)).toEqual({ keys: '2', index: '11' });
+  });
+
+  it('a revoking keys.json is kept although the held index fails under it (review #100 L1)', async () => {
+    const root = testKey();
+    const a = testKey();
+    const b = testKey();
+    const first = signRegistry({
+      now: NOW,
+      root,
+      online: a,
+      versions: [{ pack: sitePack(PACK, 2) }],
+    });
+    const kit = await createClientKit({ registry: first, clock: new FakeClock(NOW) });
+    await kit.client.check();
+    const revoking = signRegistry({ now: NOW, root, online: b, keysVersion: 2, versions: [] });
+    const files = new Map(first.files);
+    for (const f of ['keys.json', 'keys.json.sig'])
+      files.set(f, revoking.files.get(f) ?? new Uint8Array());
+    const fetcher = kit.fetcher as MemoryFetcher;
+    fetcher.files = files;
+    expect((await kit.client.check()).outcome).toBe('failed');
+    expect(floors(kit).keys).toBe('2');
+    expect(kit.registry.status().index_version).toBeNull();
+    expect(kit.registry.get(PACK)?.online).toBeNull();
+    // Replaying the old keys.json is a rollback now.
+    fetcher.files = first.files;
+    expect((await kit.client.check()).error?.code).toBe('rollback');
+  });
+
+  it('a lost held index is held again from the same published index (review #100 L2)', async () => {
+    const repos = kitRepos();
+    const held = new MemoryHeldStore();
+    const registry = signRegistry({ now: NOW, versions: [{ pack: sitePack(PACK, 2) }] });
+    const one = await createClientKit({ registry, repos, held, clock: new FakeClock(NOW) });
+    await one.client.check();
+    one.client.stop();
+    held.files.delete('index.json');
+    const two = await createClientKit({ registry, repos, held, clock: new FakeClock(NOW) });
+    expect(two.registry.status().index_version).toBeNull();
+    const again = await two.client.check();
+    expect(again.outcome).toBe('not_modified');
+    expect(two.registry.status().index_version).toBe(10);
+    expect(held.files.has('index.json')).toBe(true);
+  });
 });

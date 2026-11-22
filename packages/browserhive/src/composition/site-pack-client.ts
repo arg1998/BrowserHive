@@ -1,6 +1,6 @@
 /** @module composition/site-pack-client — the site-pack registry client (spec 13 §10.3–§10.6, §10.9, D-55): the hygienic fetcher of `sitePacksUrl` (or the testing seam's loopback fake registry), the verifier over the trust root (pinned, or the seam's test root), the held layout in `<dataDir>/site-packs/remote/`, the release snapshot in `<bundled>/registry/v1/`, and the automatic check's timer. Started once the registry is loaded; stopped with the server. */
 
-import { open } from 'node:fs/promises';
+import { lstat, open } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import type { ServerConfig } from '@browserhive/contracts/config';
 import type { Repositories } from '@browserhive/core/ports/persistence/index';
@@ -63,6 +63,9 @@ async function readUnder(dir: string, path: string, max: number): Promise<Uint8A
   const root = resolve(dir);
   const target = resolve(root, path);
   if (!target.startsWith(`${root}${sep}`)) return null;
+  // A regular file only: a FIFO would block the boot, a symlink could point anywhere (review #100 I3).
+  const info = await lstat(target).catch(() => null);
+  if (info === null || !info.isFile()) return null;
   let handle: Awaited<ReturnType<typeof open>>;
   try {
     handle = await open(target, 'r');

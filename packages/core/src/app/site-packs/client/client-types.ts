@@ -1,6 +1,7 @@
 /** @module app/site-packs/client/client-types — the registry client's collaborators and its in-memory view of the held layout (spec 13 §10.3–§10.6). */
 
 import type { RegistryIndexV1, RegistryKeysV1 } from '@browserhive/contracts/site-packs';
+import type { UnsafeListing } from '../../../domain/site-packs/registry-listing.ts';
 import type { Clock } from '../../../ports/clock.ts';
 import type { DegradationReporter } from '../../../ports/degradation-reporter.ts';
 import type { EventPublisher } from '../../../ports/event-bus.ts';
@@ -63,7 +64,10 @@ export interface RegistryClientDeps {
 export interface HeldState {
   readonly files: LayoutFiles;
   readonly keys: RegistryKeysV1;
+  /** The index with entries whose text is not plain left out (review #100 UI H1). */
   readonly index: RegistryIndexV1;
+  /** What was left out. */
+  readonly unsafe: readonly UnsafeListing[];
   readonly signedBy: string;
   readonly origin: 'registry' | 'import' | 'local';
   readonly originName: string | null;

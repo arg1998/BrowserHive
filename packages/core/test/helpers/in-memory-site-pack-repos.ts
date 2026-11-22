@@ -94,10 +94,21 @@ export class InMemorySitePackChangeRepository implements SitePackChangeRepositor
     eventId: string,
     classification: SitePackClassificationValue,
     diff: readonly SitePackChangeFieldRecord[] | null,
+    baseline?: { readonly fromVersion: number | null; readonly newDomains: readonly string[] },
   ): Promise<void> {
     const i = this.rows.findIndex((r) => r.eventId === eventId);
     const row = this.rows[i];
-    if (row !== undefined) this.rows[i] = { ...row, classification, diff };
+    if (row !== undefined) {
+      this.rows[i] = {
+        ...row,
+        classification,
+        diff,
+        ...(baseline !== undefined && {
+          fromVersion: baseline.fromVersion,
+          newDomains: [...baseline.newDomains],
+        }),
+      };
+    }
   }
 
   async markDownloaded(

@@ -10,7 +10,7 @@ import type {
 import type { SourcePackVersion } from '../../../ports/site-packs.ts';
 import { readSigned } from '../registry-build.ts';
 import { classifyForRow, usageOf } from '../registry-classify.ts';
-import type { RegistryCore } from '../registry-core.ts';
+import { baselineOf, type RegistryCore } from '../registry-core.ts';
 import type { PackEntry } from '../registry-types.ts';
 
 /** The principal of automatic decisions (spec 13 §11.8). */
@@ -145,7 +145,8 @@ export async function markDownloaded(
   row: SitePackChangeRecord,
   copy: SourcePackVersion,
 ): Promise<SitePackChangeRecord> {
-  const from = entry.local?.approved ?? entry.approved;
+  const base = baselineOf(entry);
+  const from = base?.content ?? null;
   const classified = classifyForRow(
     from?.pack ?? null,
     copy.pack,
@@ -157,7 +158,19 @@ export async function markDownloaded(
     newDomains: [...newDomains(from?.pack ?? null, copy.pack)],
   };
   await core.deps.repos.sitePackChanges.markDownloaded(row.eventId, fields);
-  return { ...row, ...fields, decision: 'downloaded' };
+  const fromVersion = base?.version ?? null;
+  if (fromVersion !== row.fromVersion) {
+    await core.deps.repos.sitePackChanges.classify(
+      row.eventId,
+      fields.classification,
+      fields.diff,
+      {
+        fromVersion,
+        newDomains: fields.newDomains,
+      },
+    );
+  }
+  return { ...row, ...fields, fromVersion, decision: 'downloaded' };
 }
 
 /** The listing of one pack in the index, or `undefined`. */

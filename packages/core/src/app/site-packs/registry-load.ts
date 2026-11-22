@@ -2,10 +2,11 @@
 
 import type { SitePackPendingEvent } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
+import { bestUsable } from '../../domain/site-packs/registry-listing.ts';
 import type { SourceCatalog } from '../../ports/site-packs.ts';
 import { assembleSnapshot, readSigned, resolvePacks } from './registry-build.ts';
 import { readPackUsage, reclassifyPending, type SignedContent } from './registry-classify.ts';
-import type { RegistryCore } from './registry-core.ts';
+import { baselineOf, type RegistryCore } from './registry-core.ts';
 import { syncCandidates } from './registry-sync.ts';
 import type { RegistrySnapshot, SitePackRegistryDeps } from './registry-types.ts';
 
@@ -70,12 +71,13 @@ export async function loadSnapshot(
     held,
   });
   // Rows from before the classifier, and verdicts a template edit moved (spec 13 §9.7).
-  const { snapshot } = await reclassifyPending(
+  const { snapshot: classified } = await reclassifyPending(
     deps.repos.sitePackChanges,
     assembled,
     usage,
     signedContentOf(deps),
   );
+  const snapshot = await withDeclined(core, classified);
   for (const [packId, { table, reason }] of corrupt) {
     deps.degradations?.report({
       code: STATE_CORRUPT,
@@ -89,4 +91,32 @@ export async function loadSnapshot(
   }
   if (corrupt.size === 0) deps.degradations?.recovered(STATE_CORRUPT);
   return { snapshot, fresh };
+}
+
+/** Decisions that set a version aside for good (review #100 M4: shown, and offered again on request). */
+const SET_ASIDE: ReadonlySet<string> = new Set(['approved', 'auto', 'rejected']);
+
+/** Marks packs whose usable registry version an operator set aside (`online.declined`). */
+async function withDeclined(
+  core: RegistryCore,
+  snapshot: RegistrySnapshot,
+): Promise<RegistrySnapshot> {
+  const packs = new Map(snapshot.packs);
+  let changed = false;
+  for (const [packId, entry] of snapshot.packs) {
+    if (entry.listing === null) continue;
+    const best = bestUsable(entry.listing, core.deps.binaryVersion);
+    const base = baselineOf(entry)?.version ?? 0;
+    if (best === null || best.v <= base) continue;
+    if (entry.pending.some((p) => p.toSha256 === best.sha256)) continue;
+    let declined = false;
+    for (const source of ['remote', 'import'] as const) {
+      const row = await core.deps.repos.sitePackChanges.findCandidate(packId, best.sha256, source);
+      if (row !== null && SET_ASIDE.has(row.decision)) declined = true;
+    }
+    if (!declined) continue;
+    packs.set(packId, { ...entry, declined: true });
+    changed = true;
+  }
+  return changed ? { ...snapshot, packs } : snapshot;
 }

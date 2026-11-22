@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it } from 'bun:test';
 import { randomBytes } from 'node:crypto';
+import { constants, createBrotliCompress } from 'node:zlib';
 import { sha256Hex } from '../../src/domain/site-packs/load.ts';
 import {
   createRegistryFetcher,
@@ -13,6 +14,30 @@ import { createClientKit, signRegistry } from '../helpers/registry-client-kit.ts
 import { sitePack } from '../helpers/site-pack-kit.ts';
 
 const NOW = Date.UTC(2026, 10, 22, 10);
+
+/** `mib` MiB of zeros, Brotli-compressed in chunks (never held whole). */
+function brotliBomb(mib: number): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const z = createBrotliCompress({ params: { [constants.BROTLI_PARAM_QUALITY]: 5 } });
+    const out: Buffer[] = [];
+    z.on('data', (c: Buffer) => out.push(c));
+    z.on('end', () => resolve(new Uint8Array(Buffer.concat(out))));
+    z.on('error', reject);
+    const chunk = Buffer.alloc(1024 * 1024);
+    let left = mib;
+    const pump = () => {
+      while (left > 0) {
+        left -= 1;
+        if (!z.write(chunk)) {
+          z.once('drain', pump);
+          return;
+        }
+      }
+      z.end();
+    };
+    pump();
+  });
+}
 const PACK = 'pack-a.test';
 
 interface Seen {
@@ -103,6 +128,7 @@ describe('request hygiene', () => {
         'user-agent',
       ]);
       expect(Object.values(s.headers).join(' ')).not.toMatch(/0\.3\.0|bun/i);
+      expect(s.headers['accept-encoding']).toBe('identity');
       expect(s.headers['if-none-match']).toBeUndefined();
     }
   });
@@ -188,6 +214,33 @@ describe('the fetcher', () => {
     });
     const result = await fetcher.fetch({ path: 'index.json', maxBytes: 1024 });
     expect(result).toMatchObject({ kind: 'failed', reason: 'redirect', status: 302 });
+  });
+
+  it('refuses a compressed body without inflating it (a Brotli bomb, review #100 H1)', async () => {
+    // 512 MiB of zeros compress to a few hundred bytes of Brotli.
+    const bomb = await brotliBomb(512);
+    expect(bomb.byteLength).toBeLessThan(16 * 1024);
+    let acceptEncoding = null as string | null;
+    const server = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch(request) {
+        acceptEncoding = request.headers.get('accept-encoding');
+        return new Response(Buffer.from(bomb), { headers: { 'content-encoding': 'br' } });
+      },
+    });
+    servers.push(server);
+    const fetcher = createRegistryFetcher({
+      url: `http://127.0.0.1:${server.port}/r/`,
+      allowLoopbackHttp: true,
+    });
+    Bun.gc(true);
+    const before = process.memoryUsage().rss;
+    const result = await fetcher.fetch({ path: 'index.json', maxBytes: 256 * 1024 });
+    const grown = process.memoryUsage().rss - before;
+    expect(result).toMatchObject({ kind: 'failed', reason: 'encoding' });
+    expect(acceptEncoding).toBe('identity');
+    expect(grown).toBeLessThan(64 * 1024 * 1024);
   });
 
   it('caps the body while it streams', async () => {

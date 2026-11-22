@@ -44,6 +44,8 @@ export async function revokeVersion(
   packId: string,
   version: number,
   by: string,
+  /** The revoked bytes (the index entry's SHA-256): only that version is touched (review #100 I1). */
+  sha256?: string,
 ): Promise<RevocationOutcome> {
   const entry = core.entry(packId);
   const state = entry.state;
@@ -52,9 +54,12 @@ export async function revokeVersion(
     state === null ||
     entry.approved === null ||
     state.approvedVersion !== version ||
+    (sha256 !== undefined && state.approvedSha256 !== sha256) ||
     state.approvedSource === null
   ) {
-    const row = entry.pending.find((p) => p.toVersion === version);
+    const row = entry.pending.find(
+      (p) => p.toVersion === version && (sha256 === undefined || p.toSha256 === sha256),
+    );
     if (row === undefined) return { outcome: 'not_in_force' };
     await core.deps.uow.transaction(async (repos) => {
       await repos.sitePackChanges.decide(row.eventId, 'superseded', by, now);
