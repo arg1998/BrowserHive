@@ -23,6 +23,11 @@ import { type HttpsSites, startHttpsSites } from '../helpers/https-sites.ts';
 import { integrationChannel } from '../helpers/integration-channel.ts';
 import { HOST } from './driver-fixture.ts';
 import { type TemplateWorld, templateWorld } from './template-fixture.ts';
+import {
+  focusedWindow,
+  type OperatorWindow,
+  operatorWindow as xOperatorWindow,
+} from './x-desktop.ts';
 
 /** A display with a window manager (minimizing is the window manager's job on X11). */
 const WM = process.env['BROWSERHIVE_HEADED_WM'] === '1' && process.platform === 'linux';
@@ -43,35 +48,9 @@ async function eventually<T>(
   }
 }
 
-/** The X window with the input focus (`xdotool`). */
-function focusedWindow(): string {
-  return spawnSync('xdotool', ['getwindowfocus'], { encoding: 'utf8' }).stdout.trim();
-}
-
-/** The operator's window: a tiny X client given the input focus (a launch must not take it). */
-function operatorWindow(): { readonly id: string; close(): void } {
-  const child = Bun.spawn(['xmessage', '-name', 'bh-operator', 'operator window']);
-  const found = spawnSync('xdotool', ['search', '--sync', '--classname', 'bh-operator'], {
-    encoding: 'utf8',
-    timeout: 10_000,
-  });
-  const id = found.stdout.trim().split('\n')[0] ?? '';
-  if (found.status !== 0 || id === '') {
-    child.kill();
-    throw new Error('xmessage/xdotool unavailable on the headed-windows leg');
-  }
-  // The window manager may still be starting (CI starts openbox right before the suite, D30 n):
-  // activate until the window really holds the focus, rather than once.
-  const deadline = Date.now() + 10_000;
-  while (focusedWindow() !== id) {
-    if (Date.now() > deadline) {
-      child.kill();
-      throw new Error(`the operator window ${id} never got the focus (${focusedWindow()})`);
-    }
-    spawnSync('xdotool', ['windowactivate', '--sync', id], { timeout: 2_000 });
-    if (focusedWindow() !== id) Bun.sleepSync(50);
-  }
-  return { id, close: () => child.kill() };
+/** The operator's window, activated by the window manager (a launch must not take its focus). */
+function operatorWindow(): OperatorWindow {
+  return xOperatorWindow(true);
 }
 
 /** Window ids and states of pages, through one browser-level DevTools session. */
@@ -209,7 +188,17 @@ describe.skipIf(!WM)('headed windows kept minimized (headedWindows=minimized, D-
           stealth,
           ...(viewport === null && { viewport }),
         });
-        expect(await s.windows.stateOf(s.page)).toBe('minimized');
+        // With an emulated viewport a window is created normal in the background and minimized
+        // once adopted; openbox reflects the minimize a few ms after the request returns (measured:
+        // 2 launches in 120 read normal at once, minimized 10 ms later). The focus never moves.
+        const minimized = (page: Page, what: string) =>
+          eventually(
+            () => s.windows.stateOf(page),
+            (v) => v === 'minimized',
+            Math.max(...LATE_RESTORE_MS) + 700,
+            what,
+          );
+        await minimized(s.page, 'the first window minimized');
         expect(focusedWindow()).toBe(operator.id);
         await s.page.goto(sites?.url('site-a.test') ?? '');
         expect(await s.windows.stateOf(s.page)).toBe('minimized');
@@ -217,7 +206,7 @@ describe.skipIf(!WM)('headed windows kept minimized (headedWindows=minimized, D-
         // outer size is a real window's (a background tab's equals its inner size, review #89 F6).
         const tab = await s.view.newPage();
         expect(await s.windows.windowOf(tab)).not.toBe(await s.windows.windowOf(s.page));
-        expect(await s.windows.stateOf(tab)).toBe('minimized');
+        await minimized(tab, 'the new tab window minimized');
         await tab.goto(sites?.url('site-a.test') ?? '');
         const sizes = await evaluateMainWorld(tab, true, () => [
           window.outerWidth - window.innerWidth,
