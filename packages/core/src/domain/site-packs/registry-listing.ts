@@ -55,7 +55,8 @@ export interface UnsafeListing {
 
 /** Plain text for index strings: no controls (a line break allowed in notes), formats or separators. */
 const UNSAFE_TITLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
-const UNSAFE_NOTES = /[\p{Cf}\p{Zl}\p{Zp}]|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
+/** Notes may break lines; nothing else unsafe. */
+const unsafeNotes = (notes: string): boolean => UNSAFE_TITLE.test(notes.replaceAll('\n', ' '));
 
 /**
  * The index without the entries whose signed text is not plain (spec 13 §9.10: shown as text
@@ -78,7 +79,7 @@ export function plainListings(index: RegistryIndexV1): {
       continue;
     }
     const versions = pack.versions.filter((v) => {
-      if (!UNSAFE_NOTES.test(v.notes)) return true;
+      if (!unsafeNotes(v.notes)) return true;
       unsafe.push({
         packId: pack.id,
         version: v.v,
