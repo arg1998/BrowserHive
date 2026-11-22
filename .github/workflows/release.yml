@@ -30,6 +30,10 @@ jobs:
         with:
           node-version: 24
       - run: npm --version
+      # `release:publish` gates on the pinned registry root keys (scripts/registry-trust-check.ts),
+      # builds, then downloads and verifies the live signed registry into the package
+      # (scripts/snapshot-registry.ts, spec 13 §10.9: public files only, no secret); a snapshot that
+      # does not verify fails the release.
       - id: changesets
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
