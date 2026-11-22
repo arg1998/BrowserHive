@@ -26,6 +26,10 @@ on:
         description: The first publication of the registry (nothing is published yet); with sign
         type: boolean
         default: false
+      index_jump:
+        description: Follow a published index version above the last known one (registry/state.json, the last signature); with sign
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       sign:
@@ -206,18 +210,19 @@ jobs:
       - name: GitHub's copy of the last signature (the floor the site cannot lower)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash scripts/registry-last-signed.sh "$RUNNER_TEMP/last-signed"
+        run: node scripts/registry-last-signed.mjs --out "$RUNNER_TEMP/last-signed"
       - name: The published layout (for the next version number)
         run: node scripts/registry-sign.mjs fetch --url "$REGISTRY_URL" --out "$RUNNER_TEMP/published"
       - name: Verify against the commit, then sign
         env:
           REGISTRY_ONLINE_KEY: ${{ secrets.REGISTRY_ONLINE_KEY }}
           FIRST: ${{ inputs.first_publish == true && '--first-publish' || '' }}
+          JUMP: ${{ inputs.index_jump == true && '--allow-jump' || '' }}
         run: >-
           node scripts/registry-sign.mjs sign --artefact "$RUNNER_TEMP/registry-unsigned"
           --out "$RUNNER_TEMP/registry-signed" --previous "$RUNNER_TEMP/published"
           --last-signed "$RUNNER_TEMP/last-signed"
-          --checksums "$RUNNER_TEMP/registry-checksums.txt" ${FIRST:+"$FIRST"}
+          --checksums "$RUNNER_TEMP/registry-checksums.txt" ${FIRST:+"$FIRST"} ${JUMP:+"$JUMP"}
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: ${{ runner.temp }}/registry-checksums.txt
@@ -225,7 +230,7 @@ jobs:
         with:
           name: registry-signed
           path: ${{ runner.temp }}/registry-signed
-          # The floor and fallback of later runs (scripts/registry-last-signed.sh); weekly re-signs
+          # The floor and fallback of later runs (scripts/registry-last-signed.mjs); weekly re-signs
           # keep a fresh one.
           retention-days: 90
 
@@ -334,7 +339,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          bash scripts/registry-last-signed.sh "$RUNNER_TEMP/last-signed"
+          node scripts/registry-last-signed.mjs --out "$RUNNER_TEMP/last-signed" \
+            || echo "::warning::GitHub's copy of the last signature could not be read; carrying without it"
           node scripts/registry-sign.mjs fetch --url "$REGISTRY_URL" --out "$RUNNER_TEMP/published" --packs \
             || echo "::warning::the published registry could not be fetched; falling back to GitHub's last signature"
           node scripts/registry-sign.mjs carry --from "$RUNNER_TEMP/published" --last-signed "$RUNNER_TEMP/last-signed" --out "$RUNNER_TEMP/registry"

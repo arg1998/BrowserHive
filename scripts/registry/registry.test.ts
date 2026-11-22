@@ -14,7 +14,15 @@ import {
   type KeyObject,
   sign,
 } from 'node:crypto';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
@@ -55,12 +63,24 @@ const build = (at: string, ...args: string[]) =>
   run(process.execPath, [join(REPO, 'scripts', 'registry-build.ts'), '--repo', at, ...args]);
 const signer = (args: string[], env: Record<string, string> = {}) =>
   run(NODE, [join(REPO, 'scripts', 'registry-sign.mjs'), ...args, '--repo', repo], env);
+/**
+ * A signature over `previous` as CI makes it: GitHub's last signature is, by default, that same
+ * layout (the normal flow), unless `extra` names another `--last-signed`.
+ */
 const signed = (out: string, previous: string, extra: string[] = []) =>
   signer(
-    ['sign', '--artefact', join(work, 'art'), '--out', out, '--previous', previous, ...extra],
-    {
-      REGISTRY_ONLINE_KEY: secret,
-    },
+    [
+      'sign',
+      '--artefact',
+      join(work, 'art'),
+      '--out',
+      out,
+      '--previous',
+      previous,
+      ...(extra.includes('--last-signed') ? [] : ['--last-signed', previous]),
+      ...extra,
+    ],
+    { REGISTRY_ONLINE_KEY: secret },
   );
 
 function pack(version: number, title: string): string {
@@ -267,7 +287,7 @@ describe('registry-build → registry-sign', () => {
         ],
       ];
       for (const [name, dir, message] of cases) {
-        const result = signed(join(work, `out-${name}`), dir);
+        const result = signed(join(work, `out-${name}`), dir, ['--last-signed', live]);
         expect([name, result.code]).toEqual([name, 1]);
         expect(result.out).toContain(message);
       }
@@ -379,7 +399,9 @@ describe('review #97 follow-up: rollback, deploy fallback, emergency revocation'
           .slice(0, 19)
           .concat('Z');
       });
-      const refused = signed(join(work, 'old-out'), old);
+      const none = join(work, 'no-last-signature');
+      mkdirSync(none, { recursive: true });
+      const refused = signed(join(work, 'old-out'), old, ['--last-signed', none]);
       expect(refused.code).toBe(1);
       expect(refused.out).toContain('more than 15 days ago');
       // The same copy is GitHub's last signature: nothing newer exists, so it is the latest.
@@ -463,7 +485,102 @@ describe('review #97 follow-up: rollback, deploy fallback, emergency revocation'
       expect(signer(['carry', '--from', out, '--out', join(work, 'rv-3')]).out).toContain(
         'carried',
       );
+      // A revoked signer's number is never followed, however large (verification #99 N3).
+      const huge = doctored('huge-revoked', live, (i) => {
+        i['version'] = 100_040;
+      });
+      const hugeOut = join(work, 'huge-out');
+      const followed = signer(
+        ['sign', '--artefact', art, '--out', hugeOut, '--previous', huge, '--last-signed', live],
+        { REGISTRY_ONLINE_KEY: readFileSync(next, 'utf8').trim() },
+      );
+      expect(followed.code).toBe(0);
+      expect((await verify(hugeOut, root)).index?.value.version).toBe(4);
       git('checkout', '-q', '--', 'registry/keys');
+    },
+    T,
+  );
+});
+
+describe('verification #99: bounded steps, placeholder roots, regular files', () => {
+  it(
+    'never signs more than one past the known floor without index_jump',
+    async () => {
+      const jumped = doctored('jumped', join(work, 'signed-3'), (i) => {
+        i['version'] = 8;
+      });
+      const last = ['--last-signed', join(work, 'signed-3')];
+      const refused = signed(join(work, 'jump-refused'), jumped, last);
+      expect(refused.code).toBe(1);
+      expect(refused.out).toContain('index_jump');
+      const allowed = signed(join(work, 'jump-allowed'), jumped, [...last, '--allow-jump']);
+      expect(allowed.code).toBe(0);
+      expect((await verify(join(work, 'jump-allowed'), root)).index?.value.version).toBe(9);
+    },
+    T,
+  );
+
+  it(
+    'before the key ceremony a docs deploy ships no registry and succeeds',
+    () => {
+      const nothing = join(work, 'ceremony-nothing');
+      mkdirSync(nothing);
+      writeFileSync(join(nothing, '.nothing-published'), 'x\n');
+      const empty = join(work, 'ceremony-last');
+      mkdirSync(empty);
+      const tool = join(REPO, 'scripts', 'registry-sign.mjs');
+      const args = [
+        'carry',
+        '--from',
+        nothing,
+        '--last-signed',
+        empty,
+        '--out',
+        join(work, 'ceremony-out'),
+      ];
+      const ok = run(NODE, [tool, ...args]); // the real tree: placeholder root keys
+      expect(ok.code).toBe(0);
+      expect(ok.out).toContain('the key ceremony has not run');
+      const served = run(NODE, [
+        tool,
+        'carry',
+        '--from',
+        join(work, 'signed-3'),
+        '--last-signed',
+        empty,
+        '--out',
+        join(work, 'ceremony-out-2'),
+      ]);
+      expect(served.code).toBe(1);
+      expect(served.out).toContain('placeholders');
+    },
+    T,
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'a symlink in the last signature is refused for signing, ignored by carry',
+    () => {
+      const linked = join(work, 'linked-last');
+      cpSync(join(work, 'signed-3'), linked, { recursive: true });
+      rmSync(join(linked, 'keys.json'));
+      symlinkSync(join(work, 'signed-3', 'keys.json'), join(linked, 'keys.json'));
+      const refused = signed(join(work, 'linked-out'), join(work, 'signed-3'), [
+        '--last-signed',
+        linked,
+      ]);
+      expect(refused.code).toBe(1);
+      expect(refused.out).toContain('not a regular file');
+      const carried = signer([
+        'carry',
+        '--from',
+        join(work, 'signed-3'),
+        '--last-signed',
+        linked,
+        '--out',
+        join(work, 'linked-carry'),
+      ]);
+      expect(carried.code).toBe(0);
+      expect(carried.out).toContain('last signature is ignored');
     },
     T,
   );

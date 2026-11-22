@@ -8,6 +8,12 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": ["**/*.ts", "registry-common.mjs", "registry-sign.mjs", "registry-keys.mjs"],
+  "include": [
+    "**/*.ts",
+    "registry-common.mjs",
+    "registry-sign.mjs",
+    "registry-keys.mjs",
+    "registry-last-signed.mjs"
+  ],
   "references": [{ "path": "../packages/contracts" }, { "path": "../packages/core" }]
 }

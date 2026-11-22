@@ -59,10 +59,10 @@ Everything the registry publishes comes from these files, never from git history
 2. **`registry-sign`** runs in the GitHub environment **`registry-signing`** and waits for the owner's approval. It checks out the commit and runs `node scripts/registry-sign.mjs` with **no dependency installed** (only Node's built-ins). In order, it:
    1. recomputes every pack file and the index from the commit's `registry/`, and refuses any difference from the artefact;
    2. verifies `keys.json` against `registry/keys/root-*.pub`, and checks that the online key in `REGISTRY_ONLINE_KEY` is listed and still valid;
-   3. reads GitHub's copy of the last signature (the newest `registry-signed` artefact of a run on `main`, kept 90 days and refreshed by every weekly re-sign) and `registry/state.json`: the highest version either knows is the floor;
+   3. reads GitHub's copy of the last signature (`scripts/registry-last-signed.mjs`: the newest `registry-signed` artefact of a successful `website.yml` or `registry-resign.yml` run of this repository on `main`, never a pull request's or a fork's; kept 90 days, refreshed by every weekly re-sign; unpacked as regular files only) and `registry/state.json`: the highest version either knows is the floor;
    4. reads the published layout and refuses to go on unless:
       - it verifies under the pinned roots, signed by an online key the commit's `keys.json` lists, or by one the published `keys.json` lists when the commit's `keys.json` is newer (a rotation or an emergency revocation the commit carries);
-      - its version is not below the floor, and within the fast-forward bound of it;
+      - its version is not below the floor, and not above it: a signature is always the floor plus one. A higher published version (`registry/state.json` lagging while GitHub's copy has expired) is followed only when the run sets **index_jump**, and never beyond the clients' fast-forward bound. An index signed by a key the commit revoked is never followed: the next signature is the floor plus one;
       - it was issued within the last 15 days, unless it is the last signature GitHub or `registry/state.json` knows (an old, validly signed copy cannot set the counter back);
       - every version it already published is unchanged;
    5. signs the next version, valid 14 days (never past the online key's `not_after`);
@@ -73,11 +73,11 @@ Everything the registry publishes comes from these files, never from git history
 1. the live registry, when it is exactly this commit's: the commit's `keys.json` byte for byte, signed by a still-valid online key of it;
 2. the live registry as deployed, when it is signed by an online key the commit's `keys.json` still lists (an expired key, or a rotation whose re-sign is still waiting); the summary asks for a re-sign;
 3. GitHub's copy of the last signature, when the live registry cannot be fetched or verified and that copy verifies the same way;
-4. no registry, only when the site serves none and GitHub holds no signature.
+4. no registry, only when the site serves none and GitHub holds no signature, or before the key ceremony (placeholder root keys), when docs deploys simply publish no registry.
 
 Otherwise the deploy stops and the site keeps what it serves. A revoked online key's layout is never carried, kept or re-deployed. `website/scripts/deploy-guard.ts` also refuses any deploy, in CI or by `bun run website:deploy`, that would remove a published registry.
 
-**When signing runs.** Only when `registry/` changed, on the weekly re-sign, or on a manual run of the **website** workflow with **sign**. In every case, only once the repository variable `REGISTRY_PUBLISH` is `true`. When nothing is published yet, the signing job refuses unless the manual run also sets **first_publish**.
+**When signing runs.** Only when `registry/` changed, on the weekly re-sign, or on a manual run of the **website** workflow with **sign**. In every case, only once the repository variable `REGISTRY_PUBLISH` is `true`. When nothing is published yet, the signing job refuses unless the manual run also sets **first_publish**. When the published version is above every version `registry/state.json` and GitHub know, it refuses unless the run sets **index_jump** (check the version first).
 
 **Recording the version.** GitHub's copy of the last signature is the floor that keeps working by itself while a signature is less than 90 days old. `registry/state.json` is the floor that survives longer gaps: now and then, copy the version from the signing job's summary into its `index_version` in a pull request.
 

@@ -13,7 +13,7 @@
  * Commands:
  *
  *   sign  --artefact <dir> --out <dir> --previous <dir> [--last-signed <dir>] [--first-publish]
- *         [--checksums <file>]
+ *         [--allow-jump] [--checksums <file>]
  *   sign  --artefact <dir> --out <dir> --test-keys <dir>    pull-request previews: a throwaway root
  *                                                           and online key no release trusts
  *   fetch --url <base> --out <dir> [--packs]                download the published layout
@@ -27,6 +27,7 @@
 import {
   appendFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -146,6 +147,19 @@ function rootsOf(repo) {
  *   max_client?: string }[] }[] }} IndexDoc
  */
 
+/**
+ * A layout file, refused unless it is a regular file (verification #99 N4: no symlink of an
+ * unpacked artefact or a fetched folder is ever followed).
+ *
+ * @param {string} dir @param {string} name @param {string} what
+ */
+function readRegular(dir, name, what) {
+  const path = join(dir, ...name.split('/'));
+  if (!existsSync(path)) refuse(`${what} ${name} is missing`);
+  if (!lstatSync(path).isFile()) refuse(`${what} ${name} is not a regular file`);
+  return readFileSync(path);
+}
+
 /** @param {Buffer} bytes @param {string} what @returns {any} */
 function jsonOf(bytes, what) {
   try {
@@ -203,7 +217,7 @@ const STALE_MS = 15 * DAY_MS;
  */
 function verifyPublished(dir, commit, floor, options = {}) {
   const what = options.what ?? 'the published';
-  const read = (/** @type {string} */ name) => readFileSync(join(dir, name));
+  const read = (/** @type {string} */ name) => readRegular(dir, name, what);
   const keysBytes = read('keys.json');
   if (verifiedBy(keysBytes, read('keys.json.sig').toString('utf8'), commit.roots) === null) {
     refuse(`${what} keys.json: no root signature verifies`);
@@ -238,6 +252,8 @@ function verifyPublished(dir, commit, floor, options = {}) {
   if (!Number.isSafeInteger(index.version) || index.version < 1 || !Array.isArray(index.packs)) {
     refuse(`${what} index.json has no valid version`);
   }
+  // A superseded (revoked) signer's number is not trusted at all: the caller ignores it (N3).
+  if (supersededSigner) return { keysBytes, keys, index, signedBy, supersededSigner };
   if (index.version < floor) {
     refuse(
       `${what} index.json is version ${index.version}, below version ${floor} known to be published (a rollback)`,
@@ -261,7 +277,7 @@ function verifyPublished(dir, commit, floor, options = {}) {
  */
 function lastSignedOf(dir, commit) {
   if (typeof dir !== 'string' || !existsSync(join(resolve(dir), 'index.json'))) return null;
-  const read = (/** @type {string} */ name) => readFileSync(join(resolve(dir), name));
+  const read = (/** @type {string} */ name) => readRegular(resolve(dir), name, 'the last signed');
   const keysBytes = read('keys.json');
   if (verifiedBy(keysBytes, read('keys.json.sig').toString('utf8'), commit.roots) === null) {
     refuse('the last signed layout (GitHub artefact): no root signature verifies');
@@ -439,21 +455,35 @@ function signCommand(flags, repo) {
     if (present.length === LAYOUT_FILES.length) {
       const published = verifyPublished(previous, commit, floor, { allowSuperseded: true });
       if (published.supersededSigner) {
+        // The live index was signed by a key the commit's newer keys.json dropped (a rotation or an
+        // emergency revocation): its version is not trusted, the counter goes on from the floor.
         console.warn(
-          `::warning::the published index is signed by ${published.signedBy}, which this commit's keys.json no longer lists (a rotation or revocation); it is replaced now`,
+          `::warning::the published index is signed by ${published.signedBy}, which this commit's keys.json no longer lists (a rotation or revocation); it is replaced now, as version ${floor + 1}`,
         );
+        version = floor + 1;
+      } else {
+        // An old, validly signed copy must not set the counter back (review #97 M1).
+        const live = published.index.version;
+        const issued = Date.parse(published.index.issued_at);
+        const confirmed = live === recorded || live === last?.index.version;
+        if (!(issued > now - STALE_MS) && !confirmed) {
+          refuse(
+            `the published index.json (version ${live}) was issued ${published.index.issued_at}, more than 15 days ago, and is not the last signature GitHub or registry/state.json knows: it may be an old copy. If it really is the latest, record ${live} in registry/state.json and run again`,
+          );
+        }
+        requireUnchangedVersions(published.index, expected.index);
+        // Never more than one step past what is known (verification #99 N3); a larger gap needs
+        // the owner's explicit index_jump, and stays inside every client's fast-forward bound.
+        if (live > floor && flags['allow-jump'] !== true) {
+          refuse(
+            `the published index.json is version ${live}, above version ${floor}, the highest registry/state.json or GitHub's last signature knows: if ${live} is genuine, record it in registry/state.json, or run the website workflow with index_jump`,
+          );
+        }
+        if (live + 1 > floor + INDEX_FAST_FORWARD - 1) {
+          refuse(`the published index.json is version ${live}, too far above ${floor} to follow`);
+        }
+        version = Math.max(live, floor) + 1;
       }
-      // An old, validly signed copy must not set the counter back (review #97 M1).
-      const issued = Date.parse(published.index.issued_at);
-      const confirmed =
-        published.index.version === recorded || published.index.version === last?.index.version;
-      if (!(issued > now - STALE_MS) && !confirmed) {
-        refuse(
-          `the published index.json (version ${published.index.version}) was issued ${published.index.issued_at}, more than 15 days ago, and is not the last signature GitHub or registry/state.json knows: it may be an old copy. If it really is the latest, record ${published.index.version} in registry/state.json and run again`,
-        );
-      }
-      requireUnchangedVersions(published.index, expected.index);
-      version = Math.max(published.index.version, floor) + 1;
     } else if (present.length === 0 && flags['first-publish'] === true) {
       console.warn(`::warning::nothing is published; publishing as version ${floor + 1}`);
       version = floor + 1;
@@ -586,11 +616,28 @@ function carryCommand(flags, repo) {
     console.log('nothing is published yet; the site deploys without a registry');
     return;
   }
+  // Before the key ceremony nothing can be published or trusted (verification #99 N2).
+  if (readRootKeys(join(repo, 'registry', 'keys')).placeholder) {
+    if (fetched)
+      refuse("the site publishes a registry, but this commit's root keys are placeholders");
+    console.log(
+      'the key ceremony has not run (placeholder root keys): the site deploys without a registry',
+    );
+    return;
+  }
   const commit = commitKeys(repo);
-  const last = lastSignedOf(flags['last-signed'], commit);
-  const floor = Math.max(recordedVersion(repo), last?.index.version ?? 0);
   /** @type {string[]} */
   const reasons = [];
+  /** @type {ReturnType<typeof lastSignedOf>} */
+  let last = null;
+  try {
+    last = lastSignedOf(flags['last-signed'], commit);
+  } catch (error) {
+    // An unverifiable artefact is ignored here (it never stops every deploy); signing refuses it.
+    if (!(error instanceof Refused)) throw error;
+    console.warn(`::warning::GitHub's copy of the last signature is ignored: ${error.message}`);
+  }
+  const floor = Math.max(recordedVersion(repo), last?.index.version ?? 0);
   if (fetched) {
     try {
       const live = verifyPublished(from, commit, floor);
