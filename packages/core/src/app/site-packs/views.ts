@@ -220,6 +220,7 @@ function onlineOf(entry: PackEntry, binaryVersion: string): SitePackView['online
     revoked: newest.revoked === true,
     needs_client: neededClient(newest, binaryVersion),
     usable_version: bestUsable(listing, binaryVersion)?.v ?? null,
+    declined: false,
   };
 }
 

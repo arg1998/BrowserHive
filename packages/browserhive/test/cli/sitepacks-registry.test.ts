@@ -218,6 +218,7 @@ describe('sitepacks download <pack> [<version>]', () => {
           revoked: false,
           needs_client: '>=0.5.0',
           usable_version: 6,
+          declined: false,
         },
       }),
     );
@@ -258,6 +259,7 @@ describe('sitepacks download <pack> [<version>]', () => {
           revoked: false,
           needs_client: '>=0.9.0',
           usable_version: null,
+          declined: false,
         },
       }),
     );
@@ -389,6 +391,7 @@ describe('the registry state in list and show', () => {
           revoked: false,
           needs_client: '>=0.9.0',
           usable_version: 5,
+          declined: false,
         },
       }),
     );

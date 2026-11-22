@@ -54,6 +54,14 @@ export const SitePackPending = z.object({
   /** The publisher's signed change summary (plain text, at most 500 characters). */
   notes: z.string().nullable(),
   classification: SitePackClassification.optional(),
+  /**
+   * What the classification and diff compare against: the approved version, else (a pack nothing
+   * approved yet) the bundled version first use would approve; `null` for a pack only the registry
+   * lists (every field is new).
+   */
+  from: z.object({ version: z.number().int(), source: SitePackSourceKind }).nullable().optional(),
+  /** The last download of this file was refused (it is content-addressed, so it will not change). */
+  refused: z.object({ reason: z.string(), detail: z.string() }).nullable().optional(),
   new_domains: z.array(z.string()).optional(),
   source: SitePackSourceKind,
   provenance: SitePackProvenance.nullable(),
@@ -85,6 +93,11 @@ export const SitePackView = z.object({
       needs_client: z.string().nullable(),
       /** The newest version this binary may use (non-revoked, inside its client range). */
       usable_version: z.number().int().nullable(),
+      /**
+       * An operator set the usable version aside (rejected it, or reverted from it): it is not
+       * pending, and Download & review offers it again.
+       */
+      declined: z.boolean(),
     })
     .nullable(),
   /** The version in force (with local content: the local override's base). */
@@ -346,6 +359,8 @@ export const SitePackExportResponse = z.object({
   index_version: z.number().int(),
   keys_version: z.number().int(),
   packs: Count,
+  /** Listed, non-revoked versions BrowserHive does not hold (run Download all first to include them). */
+  missing: z.array(z.object({ pack_id: z.string(), version: z.number().int() })),
 });
 /** `GET /site-packs/export` response. */
 export type SitePackExportResponse = z.infer<typeof SitePackExportResponse>;
@@ -442,9 +457,11 @@ export const SitePackImportResponse = z.object({
        */
       state: z.union([
         SitePackLocalState,
-        z.enum(['downloaded', 'available', 'current', 'refused', 'other_client']),
+        z.enum(['downloaded', 'available', 'current', 'refused', 'other_client', 'revoked']),
       ]),
       sha256: Sha256Hex,
+      /** The pack's updates are followed (only followed packs list pending updates for review). */
+      followed: z.boolean().optional(),
     }),
   ),
   /** A signed layout's index as accepted (`not_modified`: the one already held). */

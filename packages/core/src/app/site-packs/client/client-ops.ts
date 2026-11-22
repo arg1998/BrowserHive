@@ -578,5 +578,11 @@ export async function exportLayout(ctx: ClientContext): Promise<SitePackExportRe
       packs += 1;
     }
   }
-  return { files, index_version: held.index.version, keys_version: held.keys.version, packs };
+  return {
+    files,
+    index_version: held.index.version,
+    keys_version: held.keys.version,
+    packs,
+    missing: [],
+  };
 }

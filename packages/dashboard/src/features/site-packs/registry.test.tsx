@@ -63,6 +63,7 @@ function linkedin(patch: Partial<SitePackView> = {}) {
       revoked: false,
       needs_client: null,
       usable_version: 4,
+      declined: false,
     },
     ...patch,
   });

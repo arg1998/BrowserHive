@@ -35,7 +35,13 @@ function base64Files(files: ReadonlyMap<string, Uint8Array>): Record<string, str
 }
 
 function exportBody(files: Record<string, string> = base64Files(layout.files)) {
-  const body: SitePackExportResponse = { files, index_version: 10, keys_version: 1, packs: 2 };
+  const body: SitePackExportResponse = {
+    files,
+    index_version: 10,
+    keys_version: 1,
+    packs: 2,
+    missing: [],
+  };
   return body;
 }
 

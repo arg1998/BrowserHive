@@ -74,6 +74,7 @@ describe('what the index lists for a pack', () => {
       revoked: false,
       needs_client: '>=0.4.0',
       usable_version: 5,
+      declined: false,
     };
     expect(newestAvailable(packView({ online }))).toBe(5);
     expect(newestAvailable(packView({ online, pending: [pendingVersion({ version: 6 })] }))).toBe(
