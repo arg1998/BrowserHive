@@ -20,12 +20,13 @@ import { registrableDomain } from '../../kernel/url.ts';
 import type { Logger } from '../../ports/logger.ts';
 import type { EffectivePack, SitePackLookup, SourceCatalog } from '../../ports/site-packs.ts';
 import * as actions from './registry-actions.ts';
+import { readSigned } from './registry-build.ts';
 import { withFreshUsage } from './registry-classify.ts';
 import { packNotFound } from './registry-errors.ts';
 import { prepareFirstUse } from './registry-first-use.ts';
 import { enforceFloor } from './registry-floor.ts';
 import { humanOnlyOf, importResponse } from './registry-helpers.ts';
-import { loadSnapshot } from './registry-load.ts';
+import { loadSnapshot, signedContentOf } from './registry-load.ts';
 import {
   diffOf,
   listChanges,
@@ -42,6 +43,7 @@ import {
   type PendingUpdate,
   type PreparedApproval,
   type RegistrySnapshot,
+  type RemoteFacts,
   type SitePackRegistryDeps,
   type SourceStats,
 } from './registry-types.ts';
@@ -54,6 +56,7 @@ export class SitePackRegistry implements SitePackLookup {
   #snapshot: RegistrySnapshot = emptySnapshot();
   #stats: readonly SourceStats[] = [];
   #templateChanged: ((templateId: string) => void) | undefined;
+  #remote: RemoteFacts | undefined;
   /** Reloads and decisions run one at a time. */
   #tail: Promise<unknown> = Promise.resolve();
 
@@ -61,6 +64,41 @@ export class SitePackRegistry implements SitePackLookup {
     this.#deps = deps;
     this.#log = deps.logger.child({ module: 'site-packs' });
     this.#templateChanged = deps.templateChanged;
+    this.#remote = deps.remote;
+  }
+
+  /** Attaches the registry client (T4b): its held index, provenance and status. */
+  attachRemote(remote: RemoteFacts): void {
+    this.#remote = remote;
+  }
+
+  /**
+   * Runs one change of the registry client (rows written through `core.deps`) serialized with
+   * every decision, then rebuilds the snapshot and publishes every pack and the status.
+   */
+  mutate<T>(fn: (core: actions.RegistryCore) => Promise<T>): Promise<T> {
+    return this.#serial(async () => {
+      const out = await fn(this.#core());
+      await this.#core().refresh();
+      for (const packId of this.#snapshot.packs.keys()) this.#publishPack(packId);
+      this.#publishStatus();
+      return out;
+    });
+  }
+
+  /** Stores a verified registry or imported pack file in BrowserHive's cache (T4b client). */
+  cachePut(source: 'remote' | 'import', packId: string, sha256: string, bytes: Uint8Array) {
+    return this.#deps.cache.put(source, packId, sha256, bytes);
+  }
+
+  /** A verified registry or imported copy BrowserHive holds, checked again; `null` when none. */
+  signedCopy(packId: string, sha256: string, first: 'remote' | 'import' = 'remote') {
+    return readSigned(this.#deps.cache, packId, sha256, this.#deps.binaryVersion, first);
+  }
+
+  /** The snapshot as the registry client reads it (approved versions, follow, pins, pending rows). */
+  snapshotNow(): RegistrySnapshot {
+    return this.#snapshot;
   }
 
   /** Sets the `template.changed` hook (the template service is built after the registry). */
@@ -200,8 +238,24 @@ export class SitePackRegistry implements SitePackLookup {
 
   // --- loading --------------------------------------------------------------------------------
 
-  /** Reads both sources and swaps the snapshot (§9.6); a failed source keeps its catalog. */
-  reload(by?: string): Promise<SitePackRegistryStats> {
+  /**
+   * Reads both sources and swaps the snapshot (§9.6); a failed source keeps its catalog. Signed
+   * layouts of the local folder then go to the registry client, verified like an import (§10.5).
+   */
+  async reload(by?: string): Promise<SitePackRegistryStats> {
+    const stats = await this.#reloadSources(by);
+    const layouts = this.#snapshot.local.layouts ?? [];
+    if (this.#remote?.importLocalLayouts !== undefined) {
+      await this.#remote.importLocalLayouts(layouts).catch((err: unknown) => {
+        this.#log.warn('local signed layouts failed', {
+          detail: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+    return stats;
+  }
+
+  #reloadSources(by?: string): Promise<SitePackRegistryStats> {
     return this.#serial(async () => {
       const signal = AbortSignal.timeout(30_000);
       const bundled = await loadCatalog(
@@ -235,7 +289,11 @@ export class SitePackRegistry implements SitePackLookup {
   refreshUsage(): Promise<void> {
     return this.#serial(async () => {
       await this.#enforceFloor();
-      const next = await withFreshUsage(this.#deps.repos, this.#snapshot);
+      const next = await withFreshUsage(
+        this.#deps.repos,
+        this.#snapshot,
+        signedContentOf(this.#deps),
+      );
       if (next.changed.length === 0) return;
       this.#snapshot = next.snapshot;
       for (const packId of next.changed) this.#publishPack(packId);
@@ -245,9 +303,19 @@ export class SitePackRegistry implements SitePackLookup {
 
   // --- decisions (spec 13 §10.5, §10.6) ---------------------------------------------------------
 
-  /** Apply a pending version. @throws `SITE_PACK_NOT_FOUND`, `SITE_PACK_UPDATE_NOT_PENDING`. */
-  apply(packId: string, version: number, by: string): Promise<SitePackView> {
-    return this.#act(packId, () => actions.applyVersion(this.#core(), packId, version, by));
+  /**
+   * Apply a pending version (`auto`: auto-update applied it, decision `auto`).
+   * @throws `SITE_PACK_NOT_FOUND`, `SITE_PACK_UPDATE_NOT_PENDING`, `SITE_PACK_BELOW_FLOOR`.
+   */
+  apply(
+    packId: string,
+    version: number,
+    by: string,
+    options: { readonly auto?: boolean } = {},
+  ): Promise<SitePackView> {
+    return this.#act(packId, () =>
+      actions.applyVersion(this.#core(), packId, version, by, options.auto === true),
+    );
   }
 
   /** Reject a pending version. @throws `SITE_PACK_NOT_FOUND`, `SITE_PACK_UPDATE_NOT_PENDING`. */
@@ -318,6 +386,7 @@ export class SitePackRegistry implements SitePackLookup {
       entry: (packId) => this.#entry(packId),
       refresh: () => this.#rebuild(this.#snapshot.bundled, this.#snapshot.local),
       log: this.#log,
+      remote: this.#remote,
     };
   }
 
@@ -329,7 +398,11 @@ export class SitePackRegistry implements SitePackLookup {
 
   #view(entry: PackEntry): SitePackView {
     const sizes = new Map(this.#snapshot.bundled.packs.map((p) => [p.sha256, p.size]));
-    return toSitePackView(entry, this.#deps.bundled.release, (sha) => sizes.get(sha) ?? null);
+    return toSitePackView(entry, this.#deps.bundled.release, (sha) => sizes.get(sha) ?? null, {
+      held: this.#snapshot.held,
+      binaryVersion: this.#deps.binaryVersion,
+      provenance: (source, sha) => this.#remote?.provenance(source, entry.packId, sha) ?? null,
+    });
   }
 
   #readFacts() {
@@ -340,6 +413,7 @@ export class SitePackRegistry implements SitePackLookup {
         release: this.#deps.bundled.release,
         builtAt: this.#deps.bundled.builtAt,
         localDir: this.#deps.local.dir,
+        remote: this.#remote?.status() ?? null,
       },
       now: this.#deps.clock.now(),
     };
@@ -376,7 +450,9 @@ export class SitePackRegistry implements SitePackLookup {
   async #enforceFloor(): Promise<void> {
     const off = await enforceFloor(this.#core());
     if (off.length === 0) return;
-    this.#snapshot = (await withFreshUsage(this.#deps.repos, this.#snapshot)).snapshot;
+    this.#snapshot = (
+      await withFreshUsage(this.#deps.repos, this.#snapshot, signedContentOf(this.#deps))
+    ).snapshot;
     for (const templateId of off) this.#templateChanged?.(templateId);
   }
 

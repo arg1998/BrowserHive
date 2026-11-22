@@ -88,6 +88,12 @@ export function classificationChanged(
   );
 }
 
+/** The verified content of a downloaded registry or imported row (BrowserHive's copy), or `null`. */
+export type SignedContent = (
+  packId: string,
+  row: SitePackChangeRecord,
+) => Promise<SitePackV1 | null>;
+
 /** One template below a candidate's `stealth-profile` floor. */
 export interface FloorBlocker {
   readonly template_id: string;
@@ -116,8 +122,18 @@ export async function reclassifyPending(
   repo: Pick<Repositories['sitePackChanges'], 'classify'>,
   snapshot: RegistrySnapshot,
   usage: PackUsage,
+  signed?: SignedContent,
 ): Promise<{ snapshot: RegistrySnapshot; changed: string[] }> {
   const contents = new Map(snapshot.bundled.packs.map((p) => [p.sha256, p.pack]));
+  const contentOf = async (packId: string, row: SitePackChangeRecord) => {
+    const bundled = contents.get(row.toSha256);
+    if (bundled !== undefined) return bundled;
+    const verified =
+      row.decision === 'downloaded' && (row.source === 'remote' || row.source === 'import');
+    return verified && signed !== undefined
+      ? ((await signed(packId, row)) ?? undefined)
+      : undefined;
+  };
   const packs = new Map(snapshot.packs);
   const changed: string[] = [];
   for (const [packId, entry] of snapshot.packs) {
@@ -125,7 +141,7 @@ export async function reclassifyPending(
     let moved = false;
     const pending: SitePackChangeRecord[] = [];
     for (const row of entry.pending) {
-      const to = contents.get(row.toSha256);
+      const to = row.classification === 'revoked' ? undefined : await contentOf(packId, row);
       if (row.classification === 'revoked' || to === undefined) {
         pending.push(row);
         continue;
@@ -154,9 +170,10 @@ export async function reclassifyPending(
 export async function withFreshUsage(
   repos: UsageRepos & Pick<Repositories, 'sitePackChanges'>,
   snapshot: RegistrySnapshot,
+  signed?: SignedContent,
 ): Promise<{ snapshot: RegistrySnapshot; changed: string[] }> {
   const used = withUsage(snapshot, await repos.templateSites.listAll());
   const usage = await readPackUsage(repos);
-  const re = await reclassifyPending(repos.sitePackChanges, used.snapshot, usage);
+  const re = await reclassifyPending(repos.sitePackChanges, used.snapshot, usage, signed);
   return { snapshot: re.snapshot, changed: [...new Set([...used.changed, ...re.changed])] };
 }

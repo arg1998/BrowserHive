@@ -3,11 +3,20 @@
 import type { SitePackPendingEvent } from '@browserhive/contracts/ws';
 import type { z } from 'zod';
 import type { SourceCatalog } from '../../ports/site-packs.ts';
-import { assembleSnapshot, resolvePacks } from './registry-build.ts';
-import { readPackUsage, reclassifyPending } from './registry-classify.ts';
+import { assembleSnapshot, readSigned, resolvePacks } from './registry-build.ts';
+import { readPackUsage, reclassifyPending, type SignedContent } from './registry-classify.ts';
 import type { RegistryCore } from './registry-core.ts';
 import { syncCandidates } from './registry-sync.ts';
-import type { RegistrySnapshot } from './registry-types.ts';
+import type { RegistrySnapshot, SitePackRegistryDeps } from './registry-types.ts';
+
+/** Reads a downloaded row's verified copy for the classifier. */
+export function signedContentOf(
+  deps: Pick<SitePackRegistryDeps, 'cache' | 'binaryVersion'>,
+): SignedContent {
+  return async (packId, row) =>
+    (await readSigned(deps.cache, packId, row.toSha256, deps.binaryVersion, row.source))?.pack ??
+    null;
+}
 
 /** The degradation of an unreadable `site_pack_state` or `site_pack_changes` row. */
 export const STATE_CORRUPT = 'SITE_PACKS_STATE_CORRUPT';
@@ -34,6 +43,9 @@ export async function loadSnapshot(
     core.log.warn('site pack row unreadable', { packId, table });
   };
   const states = await deps.repos.sitePackState.list({ onUnreadable: note('site_pack_state') });
+  const onChanges = note('site_pack_changes');
+  const before = await deps.repos.sitePackChanges.listPending({ onUnreadable: onChanges });
+  const held = core.remote?.held() ?? null;
   const resolved = await resolvePacks({
     bundled,
     local,
@@ -42,9 +54,9 @@ export async function loadSnapshot(
     binaryVersion: deps.binaryVersion,
     states,
     corrupt: new Set(corrupt.keys()),
+    listed: held?.index.packs.map((p) => p.id) ?? [],
+    pending: before,
   });
-  const onChanges = note('site_pack_changes');
-  const before = await deps.repos.sitePackChanges.listPending({ onUnreadable: onChanges });
   const usage = await readPackUsage(deps.repos);
   const fresh = await syncCandidates(core, resolved, before, usage, onChanges);
   const assembled = assembleSnapshot(resolved, {
@@ -55,9 +67,15 @@ export async function loadSnapshot(
     pending: await deps.repos.sitePackChanges.listPending({ onUnreadable: onChanges }),
     sites: await deps.repos.templateSites.listAll(),
     loadedAt: deps.clock.now(),
+    held,
   });
   // Rows from before the classifier, and verdicts a template edit moved (spec 13 §9.7).
-  const { snapshot } = await reclassifyPending(deps.repos.sitePackChanges, assembled, usage);
+  const { snapshot } = await reclassifyPending(
+    deps.repos.sitePackChanges,
+    assembled,
+    usage,
+    signedContentOf(deps),
+  );
   for (const [packId, { table, reason }] of corrupt) {
     deps.degradations?.report({
       code: STATE_CORRUPT,

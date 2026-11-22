@@ -12,6 +12,8 @@ import type {
   SitePackChangeRepository,
   SitePackClassificationValue,
   SitePackDecisionValue,
+  SitePackMetaKey,
+  SitePackMetaRepository,
   SitePackSourceId,
   SitePackStateRecord,
   SitePackStateRepository,
@@ -131,6 +133,26 @@ export class SqliteSitePackChangeRepository implements SitePackChangeRepository 
     await this.#db
       .updateTable('site_pack_changes')
       .set({ classification, diff_json: diffToJson(diff) })
+      .where('event_id', '=', eventId)
+      .execute();
+  }
+
+  async markDownloaded(
+    eventId: string,
+    fields: {
+      readonly classification: SitePackClassificationValue;
+      readonly diff: readonly SitePackChangeFieldRecord[];
+      readonly newDomains: readonly string[];
+    },
+  ): Promise<void> {
+    await this.#db
+      .updateTable('site_pack_changes')
+      .set({
+        decision: 'downloaded',
+        classification: fields.classification,
+        diff_json: diffToJson(fields.diff),
+        new_domains_json: JSON.stringify(fields.newDomains),
+      })
       .where('event_id', '=', eventId)
       .execute();
   }
@@ -275,5 +297,31 @@ export class SqliteSiteGuardHitRepository implements SiteGuardHitRepository {
       .where('ts', '<', before)
       .executeTakeFirst();
     return Number(result.numDeletedRows);
+  }
+}
+
+/** SQLite implementation of {@link SitePackMetaRepository} over the `meta` table. */
+export class SqliteSitePackMetaRepository implements SitePackMetaRepository {
+  readonly #db: Kysely<DB>;
+
+  constructor(db: Kysely<DB>) {
+    this.#db = db;
+  }
+
+  async get(key: SitePackMetaKey): Promise<string | null> {
+    const row = await this.#db
+      .selectFrom('meta')
+      .select('value')
+      .where('key', '=', key)
+      .executeTakeFirst();
+    return row?.value ?? null;
+  }
+
+  async set(key: SitePackMetaKey, value: string): Promise<void> {
+    await this.#db
+      .insertInto('meta')
+      .values({ key, value })
+      .onConflict((oc) => oc.column('key').doUpdateSet({ value }))
+      .execute();
   }
 }

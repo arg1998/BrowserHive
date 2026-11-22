@@ -1,6 +1,7 @@
 /** @module interface/http/services-templates — the structural ports of the session-template and site-pack routes (spec 13 §11.1), split from `services.ts` (review #83 L7). */
 
 import type { TemplateVersionsPage } from '@browserhive/contracts/http';
+import type { SitePackRegistryClient } from '../../app/site-packs/client/registry-client.ts';
 import type { SitePackRegistry } from '../../app/site-packs/registry.ts';
 import type { TemplateHealthFacade } from '../../app/templates/health-facade.ts';
 import type { TemplateActions } from '../../app/templates/template-actions.ts';
@@ -28,6 +29,12 @@ export type SitePacksPort = Pick<
   | 'importPackText'
   | 'changes'
   | 'guardHits'
+>;
+
+/** The registry client's routes (a structural slice of `SitePackRegistryClient`, T4b). */
+export type SitePackClientPort = Pick<
+  SitePackRegistryClient,
+  'check' | 'download' | 'downloadAll' | 'importLayout' | 'exportLayout'
 >;
 
 /** The health and re-login routes' service. */

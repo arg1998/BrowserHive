@@ -39,6 +39,7 @@ import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { ArtifactFiles } from '../../ports/static-assets.ts';
 import type { OperatorActor } from '../ws/input-audit.ts';
 import type {
+  SitePackClientPort,
   SitePacksPort,
   TemplateActionsPort,
   TemplateEditPort,
@@ -51,6 +52,7 @@ import type {
 } from './services-templates.ts';
 
 export type {
+  SitePackClientPort,
   SitePacksPort,
   TemplateActionsPort,
   TemplateEditPort,
@@ -342,6 +344,8 @@ export interface HttpServices {
   readonly templateHealth: TemplateHealthPort;
   /** Site packs (spec 13 §9, §11.1, T3a). */
   readonly sitePacks: SitePacksPort;
+  /** The registry client (T4b): Check now, downloads, signed imports, export; absent in some test servers. */
+  readonly sitePackClient?: SitePackClientPort;
   /** **Clear stop** (spec 13 §9.5, T3a). */
   readonly templateSiteStops: Pick<TemplateSiteStops, 'clear'>;
   /** The agents a template's access rules refused (D60). */

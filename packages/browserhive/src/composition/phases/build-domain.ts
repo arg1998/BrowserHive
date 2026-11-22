@@ -224,6 +224,8 @@ async function buildDomain(
     sessions,
     transport,
     undo,
+    schedule: timers.schedule,
+    sitePacksTesting: ctx.input.sitePacksTesting,
   });
   const sitePacks = layer.registry;
   const sitePackPages = layer.pages;
@@ -351,6 +353,7 @@ async function buildDomain(
     publicUrl: ops.publicUrl,
     templates,
     sitePacks,
+    sitePackClient: layer.client,
     templateRecording: tpl.recording,
     templateRefusals,
     templateParts: tpl,
@@ -378,6 +381,7 @@ async function buildDomain(
       sessionParts.sweeper.stop();
       sessionParts.stopWatcher?.();
       tpl.stopTicks();
+      layer.client?.stop(); // no automatic update check after the shutdown began
       const began = clock.now();
       await sessions.closeAll('shutdown', Math.max(1_000, deadlineMs - 500));
       // Template hosts close after their sessions, within what is left (spec 13 §3.2).

@@ -6,6 +6,7 @@ import type { ResolvedConfigBundle } from '@browserhive/core/config';
 import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
 import type { HostEnvironment, LogSink } from '@browserhive/core/runtime';
 import type { SandboxHost } from './sandbox.ts';
+import type { SitePackClientTesting } from './site-pack-client.ts';
 
 /**
  * Human output channels. Each call receives ONE line without its trailing newline; the sink
@@ -43,6 +44,8 @@ export interface BootInput {
   readonly testingArgs?: readonly string[];
   /** The registry trust root of the testing seam (spec 13 §10.2); absent: the pinned root. */
   readonly sitePacksTrustRoot?: SitePacksTrustRoot;
+  /** The testing seam's loopback registry and check timing (spec 13 §10.2). */
+  readonly sitePacksTesting?: SitePackClientTesting;
 }
 
 /** A running server. */

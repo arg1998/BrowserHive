@@ -193,6 +193,18 @@ export interface SitePackChangeRepository {
     classification: SitePackClassificationValue,
     diff: readonly SitePackChangeFieldRecord[] | null,
   ): Promise<void>;
+  /**
+   * A registry or imported candidate was downloaded and verified (spec 13 §10.6): `downloaded`
+   * with its classification, field diff and new domains, by its `event_id`.
+   */
+  markDownloaded(
+    eventId: string,
+    fields: {
+      readonly classification: SitePackClassificationValue;
+      readonly diff: readonly SitePackChangeFieldRecord[];
+      readonly newDomains: readonly string[];
+    },
+  ): Promise<void>;
   /** The newest row for this candidate (pack, sha256, source), or `null`. */
   findCandidate(
     packId: string,
@@ -254,3 +266,22 @@ export interface SiteGuardHitRepository {
   countByTemplate(templateId: string, since: number): Promise<number>;
   pruneBefore(before: number): Promise<number>;
 }
+
+/**
+ * The registry client's values in the `meta` table (spec 13 §9.9: the rollback floors
+ * `site_packs.keys_version` and `site_packs.index_version`, and the client's status), so no
+ * migration is needed. Only keys under `site_packs.` are reachable.
+ */
+export interface SitePackMetaRepository {
+  get(key: SitePackMetaKey): Promise<string | null>;
+  set(key: SitePackMetaKey, value: string): Promise<void>;
+}
+
+/** The `meta` keys of the registry client. */
+export const SITE_PACK_META_KEYS = [
+  'site_packs.keys_version',
+  'site_packs.index_version',
+  'site_packs.client',
+] as const;
+/** Element of {@link SITE_PACK_META_KEYS}. */
+export type SitePackMetaKey = (typeof SITE_PACK_META_KEYS)[number];

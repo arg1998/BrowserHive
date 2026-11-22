@@ -10,7 +10,12 @@ import {
 import type { Repositories } from '../../ports/persistence/unit-of-work.ts';
 import type { SourcePackVersion } from '../../ports/site-packs.ts';
 import { domainTaken } from './registry-errors.ts';
-import type { PackEntry, RegistrySnapshot, SitePackRegistryDeps } from './registry-types.ts';
+import type {
+  PackEntry,
+  RegistrySnapshot,
+  RemoteFacts,
+  SitePackRegistryDeps,
+} from './registry-types.ts';
 
 /** The registry as its decision functions see it. */
 export interface RegistryCore {
@@ -21,6 +26,8 @@ export interface RegistryCore {
   entry(packId: string): PackEntry;
   /** Re-derives the snapshot from the current catalogs and the stored state. */
   refresh(): Promise<void>;
+  /** The registry client's facts (T4b), when attached. */
+  readonly remote?: RemoteFacts | undefined;
 }
 
 /** Appends one `site_pack.*` audit row. */

@@ -134,3 +134,53 @@ export function belowFloor(
     publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_BELOW_FLOOR.message, details),
   });
 }
+
+/** `SITE_PACK_NOT_LISTED`: the version is not the one the verified index lists as available. */
+export function notListed(packId: string, version: number): AppError<'SITE_PACK_NOT_LISTED'> {
+  const details = { pack_id: packId, version };
+  return new AppError('SITE_PACK_NOT_LISTED', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_NOT_LISTED.message, details),
+  });
+}
+
+/** `SITE_PACK_DOWNLOAD_FAILED`: not fetched, or the file is not the one the index lists. */
+export function downloadFailed(
+  packId: string,
+  version: number,
+  reason: string,
+  detail: string,
+): AppError<'SITE_PACK_DOWNLOAD_FAILED'> {
+  const details = { pack_id: packId, version, reason, detail };
+  return new AppError('SITE_PACK_DOWNLOAD_FAILED', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACK_DOWNLOAD_FAILED.message, details),
+  });
+}
+
+/** Why the registry cannot be used. */
+export type RegistryUnavailableReason =
+  | 'packs_off'
+  | 'update_check_off'
+  | 'no_trust_root'
+  | 'no_index'
+  | 'stale';
+
+const UNAVAILABLE_TEXT: Readonly<Record<RegistryUnavailableReason, string>> = {
+  packs_off: 'site packs are turned off (sitePacks=false).',
+  update_check_off:
+    'the update check is off (sitePacksUpdateCheck=false), so BrowserHive makes no request to the registry.',
+  no_trust_root:
+    'this build pins no registry keys yet, so no registry index can verify (the key ceremony is pending).',
+  no_index: 'no registry index has verified yet; check for updates first.',
+  stale:
+    'the registry index BrowserHive holds has expired (SITE_PACKS_STALE) and is never used for new content.',
+};
+
+/** `SITE_PACKS_REGISTRY_UNAVAILABLE`. */
+export function registryUnavailable(
+  reason: RegistryUnavailableReason,
+): AppError<'SITE_PACKS_REGISTRY_UNAVAILABLE'> {
+  const details = { reason, reason_text: UNAVAILABLE_TEXT[reason] };
+  return new AppError('SITE_PACKS_REGISTRY_UNAVAILABLE', details, {
+    publicMessage: renderMessage(ERROR_REGISTRY.SITE_PACKS_REGISTRY_UNAVAILABLE.message, details),
+  });
+}

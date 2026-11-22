@@ -145,17 +145,25 @@ describe('local files', () => {
     expect(error.code).toBe('SITE_PACK_INVALID');
   });
 
-  it('counts and skips signed layouts', async () => {
+  it('counts signed layouts and hands them to the registry client after each reload', async () => {
     dirs = makeDirs();
     mkdirSync(join(dirs.local, 'packs'), { recursive: true });
     writeFileSync(join(dirs.local, 'keys.json'), '{}');
     mkdirSync(join(dirs.local, 'another-layout'));
     const { registry } = createSitePackKit({ dirs });
+    const handed: string[][] = [];
+    registry.attachRemote({
+      held: () => null,
+      provenance: () => null,
+      status: () => ({}) as never,
+      importLocalLayouts: async (paths) => {
+        handed.push([...paths]);
+      },
+    });
     await registry.reload();
     expect(registry.status().local.signed_layouts).toBe(2);
-    expect(
-      registry.status().skipped.filter((s) => s.reason === 'signed_layout_unsupported'),
-    ).toHaveLength(2);
+    expect(handed).toEqual([[dirs.local, join(dirs.local, 'another-layout')]]);
+    expect(registry.status().skipped).toEqual([]);
   });
 
   it('imports an unsigned pack into the local folder, needing approval', async () => {

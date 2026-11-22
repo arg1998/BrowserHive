@@ -227,6 +227,12 @@ export type DomainEvents = {
   readonly 'site_pack.guard_hit': SiteGuardHitEvent;
   /** A template site's write confirmation opened or settled (the `site_pack.write_confirm` notification). */
   readonly 'site_pack.confirm': SiteConfirmEvent;
+  /** One registry update check (internal: `browserhive.site_pack.checks{outcome}`, spec 13 §11.7). */
+  readonly 'site_pack.checked': {
+    readonly type: 'site_pack.checked';
+    readonly outcome: 'updated' | 'not_modified' | 'failed' | 'stale';
+    readonly index_version: number | null;
+  };
   // site packs (the `site-packs` topic, spec 13 §11.3)
   readonly 'site_pack.changed': z.infer<typeof SitePackChangedEvent>;
   readonly 'site_pack.pending': z.infer<typeof SitePackPendingEvent>;

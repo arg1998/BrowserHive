@@ -48,6 +48,7 @@ import type {
   RuntimeFacts,
   SessionService,
   SitePackRegistry,
+  SitePackRegistryClient,
   StrategyState,
   SystemStatusService,
   TemplateRecordingService,
@@ -152,6 +153,8 @@ export interface DomainPart {
   >;
   /** Site packs (spec 13 §9, T3a). */
   readonly sitePacks: SitePackRegistry;
+  /** The registry client (T4b); `null` when it could not start. */
+  readonly sitePackClient: SitePackRegistryClient | null;
   /** Site pack enforcement on pages and tools (spec 13 §9.3, §9.5; T3a). */
   readonly sitePackPages: SitePackPagesParts;
   /** The strategy state a restart keeps (D53); `null` when templates or site packs are off. */

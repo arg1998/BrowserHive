@@ -75,7 +75,7 @@ describe('BundledPackSource', () => {
 });
 
 describe('LocalPackSource', () => {
-  it('loads unsigned files, skips oversized ones and counts signed layouts', async () => {
+  it('loads unsigned files, skips oversized ones and lists signed layouts for the registry client', async () => {
     dirs = makeDirs();
     writePack(dirs.local, sitePack('site-a.test', 1));
     writeFileSync(join(dirs.local, 'big.test.json'), 'x'.repeat(70 * 1024));
@@ -85,11 +85,9 @@ describe('LocalPackSource', () => {
     expect(found.packs.map((p) => [p.pack.id, p.origin])).toEqual([
       ['site-a.test', join(dirs.local, 'site-a.test.json')],
     ]);
-    expect(found.skipped.map((s) => s.reason).sort()).toEqual([
-      'signed_layout_unsupported',
-      'too_large',
-    ]);
+    expect(found.skipped.map((s) => s.reason)).toEqual(['too_large']);
     expect(found.signedLayouts).toBe(1);
+    expect(found.layouts).toEqual([join(dirs.local, 'layout')]);
   });
 });
 
