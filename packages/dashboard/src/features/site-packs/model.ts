@@ -124,8 +124,9 @@ export const SKIP_REASON_TEXT: { readonly [K in SitePackSkipReason]: string } = 
   domain_overlap: 'Another pack already owns one of its domains',
   not_found: 'BrowserHive’s copy of the approved version is missing',
   id_mismatch: 'The file name doesn’t match the pack id inside',
-  signed_layout_unsupported: 'Signed layouts arrive with a later release',
+  signed_layout_unsupported: 'Signed folders aren’t supported here',
   unreadable: 'The file couldn’t be read',
+  layout_refused: 'The signed folder didn’t verify',
 };
 
 /**

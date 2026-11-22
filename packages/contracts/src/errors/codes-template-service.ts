@@ -209,4 +209,59 @@ export const TEMPLATE_SERVICE_ERRORS = {
     resolution:
       "For each named template, turn the site off on it (the template's Sites tab, or `PUT /api/v1/templates/{id}/sites/{site}` with `enabled: false`), or create a new template with the stealth level and fingerprint noise the pack needs, sign in to the site there and remove it from the old template; then try again. Rejecting the version keeps the current one.",
   }),
+  SITE_PACK_NOT_LISTED: defineError({
+    code: 'SITE_PACK_NOT_LISTED',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'never',
+    title: 'Version not in the registry index',
+    message:
+      "Version {version} of site pack '{pack_id}' is not listed for this BrowserHive in the registry's signed index.",
+    hint: 'Press Check now, then download a version the Site packs page lists as available.',
+    details: z.object({ pack_id: z.string(), version: z.number().int() }),
+    docs: true,
+    cause:
+      'Download & review fetches only a version the last verified index lists with its size and SHA-256 (spec 13 §10.3): the version is not listed, is revoked, or needs another BrowserHive (`min_client`/`max_client`).',
+    resolution:
+      'Check for updates and pick a listed version; a version for a newer BrowserHive needs an upgrade.',
+  }),
+  SITE_PACK_DOWNLOAD_FAILED: defineError({
+    code: 'SITE_PACK_DOWNLOAD_FAILED',
+    httpStatus: 502,
+    category: 'domain',
+    retryable: 'backoff',
+    title: 'Pack download failed',
+    message:
+      "Version {version} of site pack '{pack_id}' could not be downloaded or did not verify ({reason}): {detail}. Nothing changed.",
+    hint: 'Try again later; a file that does not match the signed index is never used.',
+    details: z.object({
+      pack_id: z.string(),
+      version: z.number().int(),
+      reason: z.string(),
+      detail: z.string(),
+    }),
+    docs: true,
+    cause:
+      "The registry did not answer, or the file's size, SHA-256, schema, refinements or client range is not the one the signed index lists (a swapped, truncated or oversized file; spec 13 §10.3 step 3).",
+    resolution:
+      'Retry when the registry is reachable; if it persists, the mirror serves wrong files: use the default `sitePacksUrl` or import a verified export.',
+  }),
+  SITE_PACKS_REGISTRY_UNAVAILABLE: defineError({
+    code: 'SITE_PACKS_REGISTRY_UNAVAILABLE',
+    httpStatus: 409,
+    category: 'domain',
+    retryable: 'after_operator',
+    title: 'Registry not available',
+    message: 'The site-pack registry cannot be used here: {reason_text}',
+    hint: 'Import a signed export instead (browserhive sitepacks import <dir>), or turn the update check on.',
+    details: z.object({
+      reason: z.enum(['packs_off', 'update_check_off', 'no_trust_root', 'no_index', 'stale']),
+      reason_text: z.string(),
+    }),
+    docs: true,
+    cause:
+      'A download needs a fresh, verified index and permission to reach the registry: site packs are off (`sitePacks=false`), the update check is off (`sitePacksUpdateCheck=false`, so BrowserHive makes no request), this build pins no registry keys yet, no index has verified yet, or the held index expired (`SITE_PACKS_STALE`: an expired index is never used for new content).',
+    resolution:
+      'Turn the update check on and check again, or on an air-gapped host import a signed export from a connected one.',
+  }),
 } as const;

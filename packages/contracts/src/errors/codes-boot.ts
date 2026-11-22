@@ -491,4 +491,43 @@ export const BOOT_ERRORS = {
       "The registry's load failed as a whole (the database could not be read). Template sites behave as generic sites and only BrowserHive's default guards apply.",
     resolution: 'Fix the cause named in the log and reload the site packs.',
   }),
+  SITE_PACKS_STALE: defineError({
+    code: 'SITE_PACKS_STALE',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'never',
+    title: 'Site-pack index out of date',
+    message:
+      'The site-pack registry index (version {index_version}) expired {expired_at} and no fresh one verified; the last good index stays in force and nothing new is downloaded from it.{clock_text}',
+    hint: 'Check the registry URL and the network, then press Check now on the Site packs page (or browserhive sitepacks check).',
+    details: z.object({
+      index_version: z.number().int(),
+      expired_at: z.string(),
+      clock_skew_ms: z.number().int().optional(),
+      clock_text: z.string(),
+    }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      "The registry re-signs its index every week with a 14-day expiry (spec 13 §10.2). Every check since the held index expired either failed or was refused, so no newer signed index is known. A registry that withholds updates (a CDN serving old files) looks the same. When the registry's `Date` header is more than an hour from this machine's clock, the message says to check the system clock: a wrong clock makes a valid index look expired or not yet issued.",
+    resolution:
+      'Make the registry reachable (`sitePacksUrl`, proxy, firewall) or fix the system clock, then check again; on an air-gapped host import a fresh export (`browserhive sitepacks import <dir>`). Approved packs keep applying meanwhile. The record resolves when a fresh index verifies.',
+  }),
+  SITE_PACKS_FETCH_FAILED: defineError({
+    code: 'SITE_PACKS_FETCH_FAILED',
+    httpStatus: 500,
+    category: 'boot',
+    retryable: 'backoff',
+    title: 'Site-pack update check failing',
+    message:
+      'The site-pack update check failed {failures} times in a row: {last_error}. Approved packs keep applying.',
+    hint: 'Check the registry URL (sitePacksUrl) and the network; browserhive sitepacks check retries now.',
+    details: z.object({ failures: z.number().int(), last_error: z.string() }),
+    docs: true,
+    exitCode: 1,
+    cause:
+      'Three or more consecutive update checks could not fetch the signed index, or fetched files that did not verify (a wrong or expired signature, a rolled-back or fast-forwarded version, an oversized file; spec 13 §10.3). Nothing changes on a failed check: the last good index and every approved pack stay as they were. Checks back off (1 h, 2 h, 4 h, … up to the 24 h schedule).',
+    resolution:
+      "Fix the network or the URL; a refused file names the reason in the log and in the Site packs page's Registry card. Set `sitePacksUpdateCheck` to false on hosts that must not reach the registry. The record resolves after the next good check.",
+  }),
 } as const;

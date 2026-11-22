@@ -163,8 +163,11 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('getPreferences', 'get', '/me/preferences', null),
   ep('putPreferences', 'put', '/me/preferences', 'preferences:write'),
   ep('search', 'get', '/search', 'sessions:read'),
-  // spec 13 §11.1 site packs (T3a; the registry client's check and download arrive with T4b)
+  // spec 13 §11.1 site packs (T3a, T3b; the registry client T4b)
   ep('listSitePacks', 'get', '/site-packs', 'sitepacks:read'),
+  ep('checkSitePacks', 'post', '/site-packs/check', 'sitepacks:write'),
+  ep('downloadAllSitePacks', 'post', '/site-packs/download-all', 'sitepacks:write'),
+  ep('exportSitePacks', 'get', '/site-packs/export', 'sitepacks:read'),
   ep('listSitePackChanges', 'get', '/site-packs/changes', 'sitepacks:read'),
   ep('listSiteGuardHits', 'get', '/site-packs/guard-hits', 'sitepacks:read'),
   ep('listSiteStrategies', 'get', '/site-packs/strategies', 'sitepacks:read'),
@@ -172,6 +175,7 @@ export const HTTP_ENDPOINTS: readonly HttpEndpoint[] = [
   ep('importSitePack', 'post', '/site-packs/import', 'sitepacks:write'),
   ep('getSitePack', 'get', '/site-packs/{pack_id}', 'sitepacks:read'),
   ep('diffSitePack', 'get', '/site-packs/{pack_id}/diff', 'sitepacks:read'),
+  ep('downloadSitePack', 'post', '/site-packs/{pack_id}/download', 'sitepacks:write'),
   ep('applySitePack', 'post', '/site-packs/{pack_id}/apply', 'sitepacks:write'),
   ep('rejectSitePack', 'post', '/site-packs/{pack_id}/reject', 'sitepacks:write'),
   ep('revertSitePack', 'post', '/site-packs/{pack_id}/revert', 'sitepacks:write'),

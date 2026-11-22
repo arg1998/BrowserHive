@@ -64,6 +64,8 @@ export const SitePackSkipReason = z.enum([
   'id_mismatch',
   'signed_layout_unsupported',
   'unreadable',
+  /** A signed layout in the local folder that did not verify (spec 13 §10.5). */
+  'layout_refused',
 ]);
 /** A skip reason. */
 export type SitePackSkipReason = z.infer<typeof SitePackSkipReason>;

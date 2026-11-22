@@ -43,6 +43,7 @@ export {
   zPort,
   zPublicUrl,
   zRatio,
+  zRegistryUrl,
   zReservedEnum,
   zString,
   zUrl,
