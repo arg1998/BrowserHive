@@ -59,20 +59,27 @@ Everything the registry publishes comes from these files, never from git history
 2. **`registry-sign`** runs in the GitHub environment **`registry-signing`** and waits for the owner's approval. It checks out the commit and runs `node scripts/registry-sign.mjs` with **no dependency installed** (only Node's built-ins). In order, it:
    1. recomputes every pack file and the index from the commit's `registry/`, and refuses any difference from the artefact;
    2. verifies `keys.json` against `registry/keys/root-*.pub`, and checks that the online key in `REGISTRY_ONLINE_KEY` is listed and still valid;
-   3. reads the published layout and refuses to go on unless:
-      - it verifies under the pinned roots, signed by an online key the commit's `keys.json` lists;
-      - its version is not below `registry/state.json`;
-      - its version is within the fast-forward bound;
+   3. reads GitHub's copy of the last signature (`scripts/registry-last-signed.mjs`: the newest `registry-signed` artefact of a successful `website.yml` or `registry-resign.yml` run of this repository on `main`, never a pull request's or a fork's; kept 90 days, refreshed by every weekly re-sign; unpacked as regular files only) and `registry/state.json`: the highest version either knows is the floor;
+   4. reads the published layout and refuses to go on unless:
+      - it verifies under the pinned roots, signed by an online key the commit's `keys.json` lists, or by one the published `keys.json` lists when the commit's `keys.json` is newer (a rotation or an emergency revocation the commit carries);
+      - its version is not below the floor, and not above it: a signature is always the floor plus one. A higher published version (`registry/state.json` lagging while GitHub's copy has expired) is followed only when the run sets **index_jump**, and never beyond the clients' fast-forward bound. An index signed by a key the commit revoked is never followed: the next signature is the floor plus one;
+      - it was issued within the last 15 days, unless it is the last signature GitHub or `registry/state.json` knows (an old, validly signed copy cannot set the counter back);
       - every version it already published is unchanged;
-   4. signs the next version, valid 14 days (never past the online key's `not_after`);
-   5. attests the files (`actions/attest-build-provenance`).
+   5. signs the next version, valid 14 days (never past the online key's `not_after`);
+   6. attests the files (`actions/attest-build-provenance`).
 3. **`deploy`** publishes the signed files with the site.
 
-**Deploys that don't sign.** A deploy that does not sign (a docs change) re-publishes the live registry, but only if it is exactly this commit's: the commit's `keys.json` byte for byte, signed by a still-valid online key of it. Otherwise the docs deploy without the registry, the job fails, and the summary asks for a re-sign. A website deploy can never silently remove a published registry: `website/scripts/deploy-guard.ts` refuses that, in CI and for `bun run website:deploy`.
+**Deploys that don't sign.** A deploy that does not sign (a docs change) ships, in this order:
+1. the live registry, when it is exactly this commit's: the commit's `keys.json` byte for byte, signed by a still-valid online key of it;
+2. the live registry as deployed, when it is signed by an online key the commit's `keys.json` still lists (an expired key, or a rotation whose re-sign is still waiting); the summary asks for a re-sign;
+3. GitHub's copy of the last signature, when the live registry cannot be fetched or verified and that copy verifies the same way;
+4. no registry, only when the site serves none and GitHub holds no signature, or before the key ceremony (placeholder root keys), when docs deploys simply publish no registry.
 
-**When signing runs.** Only when `registry/` changed, on the weekly re-sign, or on a manual run of the **website** workflow with **sign**. In every case, only once the repository variable `REGISTRY_PUBLISH` is `true`. When nothing is published yet, the signing job refuses unless the manual run also sets **first_publish**.
+Otherwise the deploy stops and the site keeps what it serves. A revoked online key's layout is never carried, kept or re-deployed. `website/scripts/deploy-guard.ts` also refuses any deploy, in CI or by `bun run website:deploy`, that would remove a published registry.
 
-**Recording the version.** The signing job's summary shows the version it signed. Now and then, copy it into `registry/state.json` (`index_version`) in a pull request. That makes it the floor future signatures never go below, even if the site is wiped or serves an old copy.
+**When signing runs.** Only when `registry/` changed, on the weekly re-sign, or on a manual run of the **website** workflow with **sign**. In every case, only once the repository variable `REGISTRY_PUBLISH` is `true`. When nothing is published yet, the signing job refuses unless the manual run also sets **first_publish**. When the published version is above every version `registry/state.json` and GitHub know, it refuses unless the run sets **index_jump** (check the version first).
+
+**Recording the version.** GitHub's copy of the last signature is the floor that keeps working by itself while a signature is less than 90 days old. `registry/state.json` is the floor that survives longer gaps: now and then, copy the version from the signing job's summary into its `index_version` in a pull request.
 
 **Weekly re-sign.** `registry-resign.yml` runs every Monday and asks for the same approval. It re-signs the same content with a new version and expiry. Approve it within the week: GitHub → Actions → the waiting run → **Review deployments** → **Approve**. A missed week is harmless for 14 days. After that, installs show stale site packs (`SITE_PACKS_STALE`) and keep working with what they have.
 
@@ -84,7 +91,7 @@ A signing run refuses when what browserhive.ai serves does not verify, was signe
 
 1. Rotate the Cloudflare token.
 2. Redeploy the last good build: re-run the last successful **website** run on `main`.
-3. If no good copy exists, run the **website** workflow with **sign** and **first_publish**. It signs the version after the one `registry/state.json` records, so installs that saw a higher version refuse it as a rollback until later signatures pass their floor. Set `index_version` in `registry/state.json` to the highest version you know was published before doing this.
+3. If no good copy exists, run the **website** workflow with **sign** and **first_publish**. It signs the version after the highest one `registry/state.json` or GitHub's last signature knows, so installs that saw a higher version refuse it as a rollback until later signatures pass their floor. Set `index_version` in `registry/state.json` to the highest version you know was published before doing this.
 
 ### Deploying the website by hand
 
@@ -171,6 +178,8 @@ The signing job warns from 14 days before the online key's `not_after`, and refu
 `keys.json` itself must also be re-signed at least every 120 days; rotating the online key does that. To extend it without a new key, run `node scripts/registry-keys.mjs sign-keys --root <either root key>`.
 
 ### If the online key leaks
+
+The live index is then signed by the key you revoke. The signing job accepts that once: the commit's root-signed `keys.json` is newer than the live one, so the live index is read only for its version floor, and the new index is signed with the new key.
 
 1. **Revoke the key.**
    - Run `node scripts/registry-keys.mjs revoke --root <root key> --key-id <leaked id>`. If it is the only key, run `online-key` first, so `keys.json` names a new one.

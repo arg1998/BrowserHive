@@ -14,7 +14,15 @@ import {
   type KeyObject,
   sign,
 } from 'node:crypto';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { SitePacksTrustRoot } from '@browserhive/core/ports/site-packs';
@@ -55,12 +63,24 @@ const build = (at: string, ...args: string[]) =>
   run(process.execPath, [join(REPO, 'scripts', 'registry-build.ts'), '--repo', at, ...args]);
 const signer = (args: string[], env: Record<string, string> = {}) =>
   run(NODE, [join(REPO, 'scripts', 'registry-sign.mjs'), ...args, '--repo', repo], env);
+/**
+ * A signature over `previous` as CI makes it: GitHub's last signature is, by default, that same
+ * layout (the normal flow), unless `extra` names another `--last-signed`.
+ */
 const signed = (out: string, previous: string, extra: string[] = []) =>
   signer(
-    ['sign', '--artefact', join(work, 'art'), '--out', out, '--previous', previous, ...extra],
-    {
-      REGISTRY_ONLINE_KEY: secret,
-    },
+    [
+      'sign',
+      '--artefact',
+      join(work, 'art'),
+      '--out',
+      out,
+      '--previous',
+      previous,
+      ...(extra.includes('--last-signed') ? [] : ['--last-signed', previous]),
+      ...extra,
+    ],
+    { REGISTRY_ONLINE_KEY: secret },
   );
 
 function pack(version: number, title: string): string {
@@ -222,7 +242,7 @@ describe('registry-build → registry-sign', () => {
       expect((await verify(join(work, 'signed-2'), root)).index?.value.version).toBe(2);
       setState(40);
       const below = signed(join(work, 'signed-3'), join(work, 'signed-2'));
-      expect(below.out).toContain('below the 40 registry/state.json records');
+      expect(below.out).toContain('below version 40 known to be published');
       setState(2);
       expect(signed(join(work, 'signed-3'), join(work, 'signed-2')).code).toBe(0);
       expect((await verify(join(work, 'signed-3'), root)).index?.value.version).toBe(3);
@@ -267,7 +287,7 @@ describe('registry-build → registry-sign', () => {
         ],
       ];
       for (const [name, dir, message] of cases) {
-        const result = signed(join(work, `out-${name}`), dir);
+        const result = signed(join(work, `out-${name}`), dir, ['--last-signed', live]);
         expect([name, result.code]).toEqual([name, 1]);
         expect(result.out).toContain(message);
       }
@@ -355,13 +375,212 @@ describe('registry-build → registry-sign', () => {
       const { privateKey } = generateKeyPairSync('ed25519');
       const foreign = doctored('carry-foreign', live, unchanged, privateKey, FOREIGN_ID);
       expect(signer(['carry', '--from', foreign, '--out', join(work, 'foreign-out')]).code).toBe(1);
-      // A newer keys.json in the commit (a rotation or revocation): the old layout is not carried.
+      // A newer keys.json that still lists the signer (a re-sign waiting): kept as deployed.
       const paths = { pubDir: join(repo, 'registry', 'keys'), trustRoot: null, test: false };
       const root2 = readRootKeyFile(join(work, 'offline', 'root-2.key'), PASS);
       resignKeys(paths, root2, { now: Date.now(), keysDays: 60 });
-      const stale = signer(['carry', '--from', live, '--out', join(work, 'stale-out')]);
-      expect(stale.out).toContain("not this commit's registry/keys/keys.json");
+      const kept = signer(['carry', '--from', live, '--out', join(work, 'kept-out')]);
+      expect(kept.code).toBe(0);
+      expect(kept.out).toContain('kept the published registry');
       git('checkout', '-q', '--', 'registry/keys');
+    },
+    T,
+  );
+});
+
+describe('review #97 follow-up: rollback, deploy fallback, emergency revocation', () => {
+  it(
+    'refuses an old copy issued more than 15 days ago unless it is the last known signature',
+    () => {
+      const live = join(work, 'signed-3');
+      const old = doctored('old-copy', live, (i) => {
+        i['issued_at'] = new Date(Date.now() - 20 * 86_400_000)
+          .toISOString()
+          .slice(0, 19)
+          .concat('Z');
+      });
+      const none = join(work, 'no-last-signature');
+      mkdirSync(none, { recursive: true });
+      const refused = signed(join(work, 'old-out'), old, ['--last-signed', none]);
+      expect(refused.code).toBe(1);
+      expect(refused.out).toContain('more than 15 days ago');
+      // The same copy is GitHub's last signature: nothing newer exists, so it is the latest.
+      expect(signed(join(work, 'old-ok'), old, ['--last-signed', old]).code).toBe(0);
+    },
+    T,
+  );
+
+  it(
+    "refuses a live index below GitHub's last signature, even when registry/state.json lags",
+    () => {
+      const below = signed(join(work, 'below-out'), join(work, 'signed-2'), [
+        '--last-signed',
+        join(work, 'signed-3'),
+      ]);
+      expect(below.code).toBe(1);
+      expect(below.out).toContain('below version 3 known to be published');
+    },
+    T,
+  );
+
+  it(
+    'carry: falls back to the last signature, never ships nothing over a published registry',
+    () => {
+      const failed = join(work, 'fetch-failed');
+      mkdirSync(failed);
+      const last = ['--last-signed', join(work, 'signed-3')];
+      const fallback = signer(['carry', '--from', failed, ...last, '--out', join(work, 'fb-out')]);
+      expect(fallback.out).toContain("re-deployed GitHub's copy of the last signature");
+      expect(readFileSync(join(work, 'fb-out', 'index.json'))).toEqual(
+        readFileSync(join(work, 'signed-3', 'index.json')),
+      );
+      expect(signer(['carry', '--from', failed, '--out', join(work, 'none-out')]).code).toBe(1);
+      const empty = join(work, 'served-nothing');
+      mkdirSync(empty);
+      writeFileSync(join(empty, '.nothing-published'), 'x\n');
+      expect(signer(['carry', '--from', empty, '--out', join(work, 'empty-out')]).code).toBe(0);
+      const restored = signer(['carry', '--from', empty, ...last, '--out', join(work, 'restored')]);
+      expect(restored.out).toContain('re-deployed');
+    },
+    T,
+  );
+
+  it(
+    'an emergency revocation of the active online key signs and publishes end to end',
+    async () => {
+      const paths = { pubDir: join(repo, 'registry', 'keys'), trustRoot: null, test: false };
+      const root1 = readRootKeyFile(join(work, 'offline', 'root-1.key'), PASS);
+      const oldId = (secret.split('.')[1] ?? '') as string;
+      const next = join(work, 'offline', 'emergency.secret');
+      addOnlineKey(paths, root1, next, 30, { now: Date.now(), keysDays: 60 });
+      resignKeys(paths, root1, { now: Date.now(), keysDays: 60, revoke: oldId });
+      const keys = JSON.parse(readFileSync(join(paths.pubDir, 'keys.json'), 'utf8'));
+      expect(keys.online.map((k: { key_id: string }) => k.key_id)).not.toContain(oldId);
+      const art = join(work, 'art-revoked');
+      expect(build(repo, '--out', art).code).toBe(0);
+      const live = join(work, 'signed-3'); // signed by the revoked key
+      const out = join(work, 'revoked-signed');
+      const result = signer(
+        ['sign', '--artefact', art, '--out', out, '--previous', live, '--last-signed', live],
+        { REGISTRY_ONLINE_KEY: readFileSync(next, 'utf8').trim() },
+      );
+      expect(result.out).toContain('no longer lists');
+      expect(result.code).toBe(0);
+      const report = await verify(out, root);
+      expect(report.ok).toBe(true);
+      expect(report.index?.value.version).toBe(4);
+      expect(report.index?.signedBy).not.toBe(oldId);
+      // The revoked layout is never carried or kept; the new signature is.
+      expect(signer(['carry', '--from', live, '--out', join(work, 'rv-1')]).code).toBe(1);
+      const fromNew = signer([
+        'carry',
+        '--from',
+        live,
+        '--last-signed',
+        out,
+        '--out',
+        join(work, 'rv-2'),
+      ]);
+      expect(fromNew.code).toBe(0);
+      expect(signer(['carry', '--from', out, '--out', join(work, 'rv-3')]).out).toContain(
+        'carried',
+      );
+      // A revoked signer's number is never followed, however large (verification #99 N3).
+      const huge = doctored('huge-revoked', live, (i) => {
+        i['version'] = 100_040;
+      });
+      const hugeOut = join(work, 'huge-out');
+      const followed = signer(
+        ['sign', '--artefact', art, '--out', hugeOut, '--previous', huge, '--last-signed', live],
+        { REGISTRY_ONLINE_KEY: readFileSync(next, 'utf8').trim() },
+      );
+      expect(followed.code).toBe(0);
+      expect((await verify(hugeOut, root)).index?.value.version).toBe(4);
+      git('checkout', '-q', '--', 'registry/keys');
+    },
+    T,
+  );
+});
+
+describe('verification #99: bounded steps, placeholder roots, regular files', () => {
+  it(
+    'never signs more than one past the known floor without index_jump',
+    async () => {
+      const jumped = doctored('jumped', join(work, 'signed-3'), (i) => {
+        i['version'] = 8;
+      });
+      const last = ['--last-signed', join(work, 'signed-3')];
+      const refused = signed(join(work, 'jump-refused'), jumped, last);
+      expect(refused.code).toBe(1);
+      expect(refused.out).toContain('index_jump');
+      const allowed = signed(join(work, 'jump-allowed'), jumped, [...last, '--allow-jump']);
+      expect(allowed.code).toBe(0);
+      expect((await verify(join(work, 'jump-allowed'), root)).index?.value.version).toBe(9);
+    },
+    T,
+  );
+
+  it(
+    'before the key ceremony a docs deploy ships no registry and succeeds',
+    () => {
+      const nothing = join(work, 'ceremony-nothing');
+      mkdirSync(nothing);
+      writeFileSync(join(nothing, '.nothing-published'), 'x\n');
+      const empty = join(work, 'ceremony-last');
+      mkdirSync(empty);
+      const tool = join(REPO, 'scripts', 'registry-sign.mjs');
+      const args = [
+        'carry',
+        '--from',
+        nothing,
+        '--last-signed',
+        empty,
+        '--out',
+        join(work, 'ceremony-out'),
+      ];
+      const ok = run(NODE, [tool, ...args]); // the real tree: placeholder root keys
+      expect(ok.code).toBe(0);
+      expect(ok.out).toContain('the key ceremony has not run');
+      const served = run(NODE, [
+        tool,
+        'carry',
+        '--from',
+        join(work, 'signed-3'),
+        '--last-signed',
+        empty,
+        '--out',
+        join(work, 'ceremony-out-2'),
+      ]);
+      expect(served.code).toBe(1);
+      expect(served.out).toContain('placeholders');
+    },
+    T,
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'a symlink in the last signature is refused for signing, ignored by carry',
+    () => {
+      const linked = join(work, 'linked-last');
+      cpSync(join(work, 'signed-3'), linked, { recursive: true });
+      rmSync(join(linked, 'keys.json'));
+      symlinkSync(join(work, 'signed-3', 'keys.json'), join(linked, 'keys.json'));
+      const refused = signed(join(work, 'linked-out'), join(work, 'signed-3'), [
+        '--last-signed',
+        linked,
+      ]);
+      expect(refused.code).toBe(1);
+      expect(refused.out).toContain('not a regular file');
+      const carried = signer([
+        'carry',
+        '--from',
+        join(work, 'signed-3'),
+        '--last-signed',
+        linked,
+        '--out',
+        join(work, 'linked-carry'),
+      ]);
+      expect(carried.code).toBe(0);
+      expect(carried.out).toContain('last signature is ignored');
     },
     T,
   );
