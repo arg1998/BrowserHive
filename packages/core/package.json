@@ -16,7 +16,9 @@
     "./runtime": "./src/public/runtime.ts",
     "./server": "./src/public/server.ts",
     "./test/https-sites": "./test/helpers/https-sites.ts",
-    "./test/registry-kit": "./test/helpers/registry-kit.ts"
+    "./test/registry-kit": "./test/helpers/registry-kit.ts",
+    "./test/registry-client-kit": "./test/helpers/registry-client-kit.ts",
+    "./test/site-pack-kit": "./test/helpers/site-pack-kit.ts"
   },
   "scripts": {
     "build": "tsdown",
